@@ -1,7 +1,7 @@
 package raft
 
 type Leader struct {
-	raft *Raft
+	*Raft
 }
 
 func (l *Leader) Loop() {

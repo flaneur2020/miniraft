@@ -1,8 +1,8 @@
 package raft
 
 type Follower struct {
-	raft *Raft
+	*Raft
 }
 
-func (f *Follower) Loop() {
+func (r *Follower) Loop() {
 }

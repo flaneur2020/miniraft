@@ -1,9 +1,5 @@
 package raft
 
-import (
-	"sync"
-)
-
 const (
 	FOLLOWER  = "follower"
 	LEADER    = "leader"
@@ -11,21 +7,24 @@ const (
 )
 
 type Peer struct {
-	addr string
+	ID   string `json:"id"`
+	Addr string `json:"addr"`
 }
 
 type Raft struct {
-	ID          string
-	Epoch       int64
-	LogIndex    int
-	CommitIndex int
-	state       string
-	mutex       sync.Mutex
-	peers       map[string]*Peer
+	ID    string
+	state string
+	peers map[string]*Peer
 
 	F *Follower
 	L *Leader
 	C *Candidate
+
+	s *RaftStorage
+
+	requestChan  chan interface{}
+	responseChan chan interface{}
+	closed       chan struct{}
 }
 
 type RaftOptions struct {
