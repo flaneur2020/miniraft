@@ -37,7 +37,7 @@ func (s *RaftServer) handleHealth(w http.ResponseWriter, req *http.Request) {
 
 func (s *RaftServer) Shutdown() error {
 	log.Printf("closing raft server: listen=%s", s.listenAddr)
-	s.raft.Close()
+	s.raft.Shutdown()
 	ctx := context.TODO()
 	return s.httpServer.Shutdown(ctx)
 }

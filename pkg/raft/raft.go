@@ -80,12 +80,12 @@ func (r *Raft) Loop() {
 	}
 }
 
-func (r *Raft) Close() {
+func (r *Raft) Shutdown() {
 	log.Printf("closing raft=%s", r.ID)
 	close(r.closed)
 }
 
-func (r *Raft) Stop() {
+func (r *Raft) close() {
 	r.storage.Close()
 	close(r.reqc)
 	close(r.respc)
