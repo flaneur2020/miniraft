@@ -21,10 +21,6 @@ type RaftStorage struct {
 	path      string
 }
 
-type RaftLogEntry struct {
-	Term uint64
-}
-
 func NewRaftStorage(path string, keyPrefix string) (*RaftStorage, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {

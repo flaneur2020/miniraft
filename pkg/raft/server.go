@@ -2,7 +2,8 @@ package raft
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -21,6 +22,8 @@ func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
 	s := &RaftServer{raft: r, listenAddr: opt.ListenAddr}
 	m := http.NewServeMux()
 	m.HandleFunc("/health", s.handleHealth)
+	m.HandleFunc("/_raft/append-entries", s.handleAppendEntries)
+	m.HandleFunc("/_raft/request-vote", s.handleRequestVote)
 	s.httpServer = &http.Server{Addr: opt.ListenAddr, Handler: m}
 	return s, nil
 }
@@ -31,8 +34,63 @@ func (s *RaftServer) ListenAndServe() error {
 	return s.httpServer.ListenAndServe()
 }
 
-func (s *RaftServer) handleHealth(w http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(w, "{\"health\": true}")
+func (s *RaftServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	s.response(w, RaftResponse{Code: SUCCESS, Message: "health"})
+}
+
+func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request) {
+	req := AppendEntriesRequest{}
+	err := s.parseRequest(r, &req)
+	if err != nil {
+		s.responseError(w, 400, err.Error())
+		return
+	}
+	s.raft.reqc <- req
+	resp := <-s.raft.respc
+	s.response(w, resp)
+}
+
+func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
+	req := RequestVoteRequest{}
+	err := s.parseRequest(r, &req)
+	if err != nil {
+		s.responseError(w, 400, err.Error())
+		return
+	}
+	s.raft.reqc <- req
+	resp := <-s.raft.respc
+	s.response(w, resp)
+}
+
+func (s *RaftServer) parseRequest(r *http.Request, target interface{}) error {
+	buf, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	defer r.Body.Close()
+	err = json.Unmarshal(buf, target)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *RaftServer) response(w http.ResponseWriter, resp RaftResponse) {
+	buf, err := json.Marshal(resp)
+	if err != nil {
+		s.responseError(w, 500, err.Error())
+	}
+	w.WriteHeader(resp.Code)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(buf)
+}
+
+func (s *RaftServer) responseError(w http.ResponseWriter, code int, message string) {
+	resp := map[string]interface{}{"code": code, "message": message}
+	buf, _ := json.Marshal(resp)
+	w.WriteHeader(code)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(buf)
 }
 
 func (s *RaftServer) Shutdown() error {

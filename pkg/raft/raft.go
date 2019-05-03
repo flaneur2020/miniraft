@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"log"
+	"time"
 )
 
 const (
@@ -22,6 +23,8 @@ type Raft struct {
 	state string
 	peers map[string]Peer
 
+	electionTimeout time.Duration
+
 	F *Follower
 	L *Leader
 	C *Candidate
@@ -29,7 +32,7 @@ type Raft struct {
 	storage *RaftStorage
 
 	reqc   chan interface{}
-	respc  chan interface{}
+	respc  chan RaftResponse
 	closed chan struct{}
 }
 
@@ -62,8 +65,10 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		peers:   peers,
 		storage: storage,
 
+		electionTimeout: 20 * time.Second,
+
 		reqc:   make(chan interface{}),
-		respc:  make(chan interface{}),
+		respc:  make(chan RaftResponse),
 		closed: make(chan struct{}),
 	}
 	r.F = NewFollower(r)
@@ -101,10 +106,14 @@ func (r *Raft) closeRaft() {
 	close(r.respc)
 }
 
-func (r *Raft) sendAppendEntriesRequest(req *AppendEntriesRequest) *AppendEntriesResponse {
-	return &AppendEntriesResponse{}
+func (r *Raft) setState(s string) {
+	r.state = s
 }
 
-func (r *Raft) sendRequestVoteRequest(req *RequestVoteRequest) *RequestVoteResponse {
-	return &RequestVoteResponse{}
+func (r *Raft) sendAppendEntriesRequest(req *AppendEntriesRequest) *RaftResponse {
+	return &RaftResponse{}
+}
+
+func (r *Raft) sendRequestVoteRequest(req *RequestVoteRequest) *RaftResponse {
+	return &RaftResponse{}
 }
