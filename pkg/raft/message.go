@@ -1,9 +1,13 @@
 package raft
 
 type AppendEntriesRequest struct {
-	Term int64
+	Term        uint64
+	CommitIndex uint64
+	LeaderID    string
 }
 
 type RequestVoteRequest struct {
-	Term int64
+	CandidateID  string
+	LastLogIndex uint64
+	LastLogTerm  uint64
 }

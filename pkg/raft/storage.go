@@ -8,10 +8,11 @@ import (
 )
 
 const (
-	kCurrentTerm = "m:current-term"
-	kVoteForPeer = "m:vote-for-peer"
-	kCommitIndex = "m:commit-index"
-	kLastApplied = "m:last-applied"
+	kCurrentTerm  = "m:current-term"
+	kVotedForPeer = "m:vote-for-peer"
+	kCommitIndex  = "m:commit-index"
+	kLastApplied  = "m:last-applied"
+	kLogEntries   = "l:log-entries"
 )
 
 type RaftStorage struct {
@@ -20,9 +21,29 @@ type RaftStorage struct {
 }
 
 type RaftLogEntry struct {
+	Term uint64
+}
+
+func NewRaftStorage(dbPath string, keyPrefix string) (*RaftStorage, error) {
+	db, err := leveldb.OpenFile(dbPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	s := &RaftStorage{
+		db:        db,
+		keyPrefix: keyPrefix,
+	}
+	return s, nil
 }
 
 func (s *RaftStorage) Reset() {
+	s.PutCommitIndex(0)
+	s.PutCurrentTerm(0)
+	s.PutLastApplied(0)
+}
+
+func (s *RaftStorage) Close() {
+	s.db.Close()
 }
 
 func (s *RaftStorage) GetCurrentTerm() (uint64, error) {
