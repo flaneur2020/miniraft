@@ -9,11 +9,12 @@ const (
 	FOLLOWER  = "follower"
 	LEADER    = "leader"
 	CANDIDATE = "candidate"
+	CLOSED    = "closed"
 )
 
 type Peer struct {
-	ID   string `json:"id"`
-	Addr string `json:"addr"`
+	ID   string
+	Addr string
 }
 
 type Raft struct {
@@ -43,6 +44,9 @@ type RaftOptions struct {
 func NewRaft(opt *RaftOptions) (*Raft, error) {
 	peers := map[string]Peer{}
 	for id, addr := range opt.InitialPeers {
+		if id == opt.ID {
+			continue
+		}
 		peers[id] = Peer{ID: id, Addr: addr}
 	}
 
@@ -69,24 +73,38 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 }
 
 func (r *Raft) Loop() {
-	log.Printf("start state loop: raft=%s state=%s storage=%s", r.ID, r.state, r.storage.path)
-	switch r.state {
-	case FOLLOWER:
-		r.F.Loop()
-	case LEADER:
-		r.L.Loop()
-	case CANDIDATE:
-		r.C.Loop()
+	log.Printf("raft.loop.start: id=%s state=%s storage=%s peers=%v", r.ID, r.state, r.storage.path, r.peers)
+	for {
+		switch r.state {
+		case FOLLOWER:
+			r.F.Loop()
+		case LEADER:
+			r.L.Loop()
+		case CANDIDATE:
+			r.C.Loop()
+		case CLOSED:
+			log.Printf("raft.loop.closed id=%s", r.ID)
+			break
+		}
 	}
 }
 
 func (r *Raft) Shutdown() {
-	log.Printf("closing raft=%s", r.ID)
+	log.Printf("raft.shutdown id=%s", r.ID)
 	close(r.closed)
 }
 
-func (r *Raft) close() {
+func (r *Raft) closeRaft() {
+	r.state = CLOSED
 	r.storage.Close()
 	close(r.reqc)
 	close(r.respc)
+}
+
+func (r *Raft) sendAppendEntriesRequest(req *AppendEntriesRequest) *AppendEntriesResponse {
+	return &AppendEntriesResponse{}
+}
+
+func (r *Raft) sendRequestVoteRequest(req *RequestVoteRequest) *RequestVoteResponse {
+	return &RequestVoteResponse{}
 }

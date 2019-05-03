@@ -6,8 +6,14 @@ type AppendEntriesRequest struct {
 	LeaderID    string
 }
 
+type AppendEntriesResponse struct {
+}
+
 type RequestVoteRequest struct {
 	CandidateID  string
 	LastLogIndex uint64
 	LastLogTerm  uint64
+}
+
+type RequestVoteResponse struct {
 }
