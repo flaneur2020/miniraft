@@ -1,0 +1,7 @@
+{
+    "id": "r3",
+    "storagePath": "/tmp/raft3",
+    "listenAddr": "0.0.0.0:4503",
+    "peerAddr": "localhost:4503",
+    "initialPeers": {"r1": "localhost:4501", "r2": "localhost:4502", "r3": "localhost:4053"}
+}

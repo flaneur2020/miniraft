@@ -1,6 +1,9 @@
 package raft
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 const (
 	FOLLOWER  = "follower"
@@ -24,16 +27,17 @@ type Raft struct {
 
 	storage *RaftStorage
 
-	requestChan  chan interface{}
-	responseChan chan interface{}
+	reqc   chan interface{}
+	respc  chan interface{}
+	closed chan struct{}
 }
 
 type RaftOptions struct {
-	ID           string
-	StoragePath  string
-	ListenAddr   string
-	PeerAddr     string
-	InitialPeers map[string]string
+	ID           string            `json:"id"`
+	StoragePath  string            `json:"storagePath"`
+	ListenAddr   string            `json:"listenAddr"`
+	PeerAddr     string            `json:"peerAddr"`
+	InitialPeers map[string]string `json:"initialPeers"`
 }
 
 func NewRaft(opt *RaftOptions) (*Raft, error) {
@@ -49,12 +53,14 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 	}
 
 	r := &Raft{
-		ID:           opt.ID,
-		state:        FOLLOWER,
-		peers:        peers,
-		storage:      storage,
-		requestChan:  make(chan interface{}),
-		responseChan: make(chan interface{}),
+		ID:      opt.ID,
+		state:   FOLLOWER,
+		peers:   peers,
+		storage: storage,
+
+		reqc:   make(chan interface{}),
+		respc:  make(chan interface{}),
+		closed: make(chan struct{}),
 	}
 	r.F = NewFollower(r)
 	r.L = NewLeader(r)
@@ -63,6 +69,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 }
 
 func (r *Raft) Loop() {
+	log.Printf("start state loop: raft=%s state=%s", r.ID, r.state)
 	switch r.state {
 	case FOLLOWER:
 		r.F.Loop()
@@ -74,7 +81,12 @@ func (r *Raft) Loop() {
 }
 
 func (r *Raft) Close() {
+	log.Printf("closing raft=%s", r.ID)
+	close(r.closed)
+}
+
+func (r *Raft) Stop() {
 	r.storage.Close()
-	close(r.requestChan)
-	close(r.responseChan)
+	close(r.reqc)
+	close(r.respc)
 }
