@@ -2,8 +2,14 @@ package raft
 
 const (
 	SUCCESS        = 200
+	NOT_FOUND      = 404
 	BAD_REQUEST    = 400
 	INTERNAL_ERROR = 500
+)
+
+const (
+	OP_WRTIE  = 1
+	OP_DELETE = 2
 )
 
 type AppendEntriesRequest struct {
@@ -17,6 +23,9 @@ type AppendEntriesRequest struct {
 }
 
 type AppendEntriesResponseBody struct {
+	Term         uint64 `json:"term"`
+	Success      bool   `json:"success"`
+	LastLogIndex uint64 `json:"lastLogIndex"`
 }
 
 type RequestVoteRequest struct {
@@ -27,10 +36,25 @@ type RequestVoteRequest struct {
 }
 
 type RequestVoteResponseBody struct {
+	Term        uint64 `json:"term"`
+	VoteGranted bool   `json:"voteGranted"`
+}
+
+type ShowStatusRequest struct {
+}
+
+type ShowStatusResponseBody struct {
+	Term        uint64          `json:"term"`
+	CommitIndex uint64          `json:"commitIndex"`
+	Peers       map[string]Peer `json:"peers"`
+	State       string          `json:"state"`
 }
 
 type RaftLogEntry struct {
-	Term uint64
+	OpType int    `json:"opType"`
+	Term   uint64 `json:"term"`
+	Key    []byte `json:"key"`
+	Value  []byte `json:"value"`
 }
 
 type RaftResponse struct {

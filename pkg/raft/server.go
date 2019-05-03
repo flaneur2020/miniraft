@@ -24,6 +24,7 @@ func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
 	m.HandleFunc("/health", s.handleHealth)
 	m.HandleFunc("/_raft/append-entries", s.handleAppendEntries)
 	m.HandleFunc("/_raft/request-vote", s.handleRequestVote)
+	m.HandleFunc("/_raft/status", s.handleStatus)
 	s.httpServer = &http.Server{Addr: opt.ListenAddr, Handler: m}
 	return s, nil
 }
@@ -35,6 +36,10 @@ func (s *RaftServer) ListenAndServe() error {
 }
 
 func (s *RaftServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	s.response(w, RaftResponse{Code: SUCCESS, Message: "health"})
+}
+
+func (s *RaftServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	s.response(w, RaftResponse{Code: SUCCESS, Message: "health"})
 }
 

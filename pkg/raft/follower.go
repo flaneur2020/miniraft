@@ -38,7 +38,7 @@ func (r *Follower) Loop() {
 				resp := r.processRequestVoteRequest(req)
 				r.respc <- resp
 			default:
-				r.respc <- RaftResponse{Code: 500, Message: fmt.Sprintf("unknown message: %v", req)}
+				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request: %v", req)}
 			}
 		}
 	}

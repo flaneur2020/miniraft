@@ -117,3 +117,12 @@ func (r *Raft) sendAppendEntriesRequest(req *AppendEntriesRequest) *RaftResponse
 func (r *Raft) sendRequestVoteRequest(req *RequestVoteRequest) *RaftResponse {
 	return &RaftResponse{}
 }
+
+func (r *Raft) processShowStatusRequest(req ShowStatusRequest) RaftResponse {
+	b := ShowStatusResponseBody{}
+	b.Term, _ = r.storage.GetCurrentTerm()
+	b.CommitIndex, _ = r.storage.GetCommitIndex()
+	b.Peers = r.peers
+	b.State = r.state
+	return RaftResponse{Code: SUCCESS, Message: "success", Body: b}
+}
