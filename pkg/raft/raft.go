@@ -69,7 +69,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 }
 
 func (r *Raft) Loop() {
-	log.Printf("start state loop: raft=%s state=%s", r.ID, r.state)
+	log.Printf("start state loop: raft=%s state=%s storage=%s", r.ID, r.state, r.storage.path)
 	switch r.state {
 	case FOLLOWER:
 		r.F.Loop()

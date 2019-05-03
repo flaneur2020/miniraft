@@ -32,31 +32,22 @@ func run(path string) {
 		panic(fmt.Sprintf("load raft option failed: %s", err))
 	}
 
-	r, err := raft.NewRaft(opt)
+	rs, err := raft.NewRaftServer(opt)
 	if err != nil {
-		panic(fmt.Sprintf("new raft failed: %s", err))
+		panic(fmt.Sprintf("new raft server failed: %s", err))
 	}
-	defer r.Close()
-	go r.Loop()
-
-	rs := raft.NewRaftServer(r, opt.ListenAddr)
-
 	go func() {
-		sc := make(chan os.Signal, 1)
-		signal.Notify(sc,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT)
-		<-sc
-		if err := rs.Shutdown(); err != nil {
-			panic(fmt.Sprintf("fail on shutdown: %s", err))
+		err = rs.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			panic(fmt.Sprintf("fail on listen"))
 		}
 	}()
 
-	err = rs.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		panic(fmt.Sprintf("fail on "))
-	}
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	<-sc
+
+	rs.Shutdown()
 }
 
 func help() {

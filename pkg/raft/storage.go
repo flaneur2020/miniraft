@@ -18,19 +18,21 @@ const (
 type RaftStorage struct {
 	db        *leveldb.DB
 	keyPrefix string
+	path      string
 }
 
 type RaftLogEntry struct {
 	Term uint64
 }
 
-func NewRaftStorage(dbPath string, keyPrefix string) (*RaftStorage, error) {
-	db, err := leveldb.OpenFile(dbPath, nil)
+func NewRaftStorage(path string, keyPrefix string) (*RaftStorage, error) {
+	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
 	}
 	s := &RaftStorage{
 		db:        db,
+		path:      path,
 		keyPrefix: keyPrefix,
 	}
 	return s, nil
