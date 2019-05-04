@@ -28,7 +28,7 @@ func (r *Candidate) Loop() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request: %v", req)}
+				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request for candidate: %v", req)}
 			}
 		}
 	}

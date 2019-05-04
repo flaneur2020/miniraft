@@ -13,11 +13,6 @@ const (
 	CLOSED    = "closed"
 )
 
-type Peer struct {
-	ID   string
-	Addr string
-}
-
 type Raft struct {
 	ID    string
 	state string
