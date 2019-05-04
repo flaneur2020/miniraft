@@ -23,7 +23,8 @@ type Raft struct {
 	state string
 	peers map[string]Peer
 
-	electionTimeout time.Duration
+	heartbeatInterval time.Duration
+	electionTimeout   time.Duration
 
 	F *Follower
 	L *Leader
@@ -65,7 +66,8 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		peers:   peers,
 		storage: storage,
 
-		electionTimeout: 20 * time.Second,
+		heartbeatInterval: 100 * time.Millisecond,
+		electionTimeout:   20 * time.Second,
 
 		reqc:   make(chan interface{}),
 		respc:  make(chan RaftResponse),

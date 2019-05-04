@@ -2,9 +2,11 @@ package raft
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	leveldbutil "github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -68,11 +70,35 @@ func (s *RaftStorage) PutLastApplied(v uint64) error {
 	return s.dbPutUint64([]byte(kLastApplied), v)
 }
 
-func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) {
+func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
+	batch := new(leveldb.Batch)
+	for _, le := range entries {
+		k := []byte(fmt.Sprintf("%s:%s", kLogEntries, uint64ToBytes(le.Index)))
+		v, _ := json.Marshal(le)
+		batch.Put(k, v)
+	}
+	err := s.db.Write(batch, nil)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func (s *RaftStorage) GetLastLogIndex() uint64 {
-	return 0
+func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
+	prefix := leveldbutil.BytesPrefix([]byte(kLogEntries))
+	iter := s.db.NewIterator(prefix, nil)
+	defer iter.Release()
+	exists := iter.Last()
+	if !exists {
+		return nil, nil
+	}
+	buf := iter.Value()
+	le := RaftLogEntry{}
+	err := json.Unmarshal(buf, &le)
+	if err != nil {
+		return nil, err
+	}
+	return &le, nil
 }
 
 func (s *RaftStorage) dbGetUint64(k []byte) (uint64, error) {
@@ -90,4 +116,11 @@ func (s *RaftStorage) dbPutUint64(k []byte, v uint64) error {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, v)
 	return s.db.Put(key, buf, nil)
+}
+
+// uint64ToBytes converts an uint64 number to a lexicographically order bytes
+func uint64ToBytes(v uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, v)
+	return b
 }

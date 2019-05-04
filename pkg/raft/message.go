@@ -14,7 +14,7 @@ const (
 
 type AppendEntriesRequest struct {
 	Term         uint64 `json:"term"`
-	LeaderPeer   Peer   `json:"leaderPeer"`
+	LeaderID     string `json:"leaderID"`
 	CommitIndex  uint64 `json:"commitIndex"`
 	PrevLogIndex uint64 `json:"prevLogIndex"`
 	PrevLogTerm  uint64 `json:"prevLogTerm"`
@@ -29,10 +29,10 @@ type AppendEntriesResponseBody struct {
 }
 
 type RequestVoteRequest struct {
-	Term          uint64 `json:"term"`
-	CandidatePeer Peer   `json:"candidatePeer"`
-	LastLogIndex  uint64 `json:"lastLogIndex"`
-	LastLogTerm   uint64 `json:"lasstLogTerm"`
+	Term         uint64 `json:"term"`
+	CandidateID  string `json:"candidateID"`
+	LastLogIndex uint64 `json:"lastLogIndex"`
+	LastLogTerm  uint64 `json:"lasstLogTerm"`
 }
 
 type RequestVoteResponseBody struct {
@@ -53,8 +53,7 @@ type ShowStatusResponseBody struct {
 type RaftLogEntry struct {
 	OpType int    `json:"opType"`
 	Term   uint64 `json:"term"`
-	Key    []byte `json:"key"`
-	Value  []byte `json:"value"`
+	Index  uint64 `json:"index"`
 }
 
 type RaftResponse struct {

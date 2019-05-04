@@ -30,13 +30,12 @@ func (r *Follower) Loop() {
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
 			case AppendEntriesRequest:
-				log.Printf("follower.loop reqc=AppendEntriesRequest req=%-v", req)
-				resp := r.processAppendEntriesRequest(req)
-				r.respc <- resp
+				r.respc <- r.processAppendEntriesRequest(req)
 				r.resetElectionTimer()
 			case RequestVoteRequest:
-				resp := r.processRequestVoteRequest(req)
-				r.respc <- resp
+				r.respc <- r.processRequestVoteRequest(req)
+			case ShowStatusRequest:
+				r.respc <- r.processShowStatusRequest(req)
 			default:
 				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request: %v", req)}
 			}
