@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 )
 
@@ -59,5 +60,7 @@ func (r *Follower) resetElectionTimer() {
 	if r.electionTimer == nil {
 		r.electionTimer = time.NewTimer(r.electionTimeout)
 	}
-	r.electionTimer.Reset(r.electionTimeout)
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	delta := rand.Int63n(int64(r.electionTimeout))
+	r.electionTimer.Reset(r.electionTimeout + time.Duration(delta))
 }

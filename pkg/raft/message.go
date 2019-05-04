@@ -23,9 +23,8 @@ type AppendEntriesRequest struct {
 }
 
 type AppendEntriesResponseBody struct {
-	Term         uint64 `json:"term"`
-	Success      bool   `json:"success"`
-	LastLogIndex uint64 `json:"lastLogIndex"`
+	Term    uint64 `json:"term"`
+	Success bool   `json:"success"`
 }
 
 type RequestVoteRequest struct {

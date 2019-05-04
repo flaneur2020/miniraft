@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -62,7 +63,11 @@ func (r *Leader) broadcastHeartbeats() error {
 	}
 	for id, request := range requests {
 		p := r.peers[id]
-		p.SendAppendEntriesRequest(request)
+		resp, err := p.SendAppendEntriesRequest(request)
+		if err != nil {
+			return err
+		}
+		log.Printf("raft.leader.append-entries resp=%-v", resp)
 	}
 	return nil
 }

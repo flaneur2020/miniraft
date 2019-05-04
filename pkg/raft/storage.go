@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	kCurrentTerm  = "m:current-term"
-	kVotedForPeer = "m:vote-for-peer"
-	kCommitIndex  = "m:commit-index"
-	kLastApplied  = "m:last-applied"
-	kLogEntries   = "l:log-entries"
+	kCurrentTerm = "m:current-term"
+	kVotedFor    = "m:voted-for"
+	kCommitIndex = "m:commit-index"
+	kLastApplied = "m:last-applied"
+	kLogEntries  = "l:log-entries"
 )
 
 type RaftStorage struct {
@@ -50,6 +50,14 @@ func (s *RaftStorage) GetCurrentTerm() (uint64, error) {
 	return s.dbGetUint64([]byte(kCurrentTerm))
 }
 
+func (s *RaftStorage) MustGetCurrentTerm() uint64 {
+	term, err := s.GetCurrentTerm()
+	if err != nil {
+		panic(err)
+	}
+	return term
+}
+
 func (s *RaftStorage) PutCurrentTerm(v uint64) error {
 	return s.dbPutUint64([]byte(kCurrentTerm), v)
 }
@@ -68,6 +76,14 @@ func (s *RaftStorage) GetLastApplied() (uint64, error) {
 
 func (s *RaftStorage) PutLastApplied(v uint64) error {
 	return s.dbPutUint64([]byte(kLastApplied), v)
+}
+
+func (s *RaftStorage) GetVotedFor() (string, error) {
+	return s.dbGetString([]byte(kVotedFor))
+}
+
+func (s *RaftStorage) PutVotedFor(v string) error {
+	return s.dbPutString([]byte(kVotedFor), v)
 }
 
 func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
@@ -134,6 +150,20 @@ func (s *RaftStorage) dbPutUint64(k []byte, v uint64) error {
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, v)
 	return s.db.Put(key, buf, nil)
+}
+
+func (s *RaftStorage) dbGetString(k []byte) (string, error) {
+	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
+	buf, err := s.db.Get(key, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
+func (s *RaftStorage) dbPutString(k []byte, v string) error {
+	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
+	return s.db.Put(key, []byte(v), nil)
 }
 
 // uint64ToBytes converts an uint64 number to a lexicographically order bytes
