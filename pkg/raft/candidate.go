@@ -9,8 +9,6 @@ import (
 
 type Candidate struct {
 	*Raft
-
-	electionTimer *time.Timer
 }
 
 func NewCandidate(r *Raft) *Candidate {
@@ -20,21 +18,20 @@ func NewCandidate(r *Raft) *Candidate {
 }
 
 func (r *Candidate) Loop() {
-	r.resetElectionTimer()
 	grantedC := make(chan bool)
 	r.runVote(grantedC)
+	electionTimer := TimerBetween(r.electionTimeout, r.electionTimeout*2)
 	for r.state == CANDIDATE {
 		select {
 		case <-r.closed:
 			r.closeRaft()
-			r.runVote(grantedC)
-		case <-r.electionTimer.C:
+		case <-electionTimer.C:
 			r.runVote(grantedC)
 		case granted := <-grantedC:
 			if granted {
 				r.upgradeToLeader()
 			} else {
-				r.resetElectionTimer()
+				electionTimer = TimerBetween(r.electionTimeout, r.electionTimeout*2)
 			}
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
@@ -57,7 +54,7 @@ func (r *Candidate) Loop() {
 func (r *Candidate) processAppendEntriesRequest(req AppendEntriesRequest) RaftResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	if req.Term >= currentTerm {
-		r.setState(FOLLOWER)
+		r.followTerm(req.Term)
 		b := &AppendEntriesResponseBody{Term: currentTerm, Success: true}
 		return RaftResponse{Code: SUCCESS, Message: "hello new leader", Body: b}
 	}
@@ -118,8 +115,8 @@ func (r *Candidate) runVote(grantedC chan bool) error {
 
 func (r *Candidate) followTerm(term uint64) {
 	currentTerm := r.storage.MustGetCurrentTerm()
-	if !(term > currentTerm) {
-		panic("must term > currentTerm")
+	if !(term >= currentTerm) {
+		panic("must term >= currentTerm")
 	}
 	// degrade to FOLLOWER when found someone's term greater than ours in RequestVote
 	r.setState(FOLLOWER)
@@ -149,11 +146,8 @@ func (r *Candidate) buildRequestVoteRequests() (map[string]*RequestVoteRequest, 
 	return requests, nil
 }
 
-func (r *Candidate) resetElectionTimer() {
-	if r.electionTimer == nil {
-		r.electionTimer = time.NewTimer(r.electionTimeout)
-	}
+func TimerBetween(min, max time.Duration) *time.Timer {
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	delta := rand.Int63n(int64(r.electionTimeout))
-	r.electionTimer.Reset(r.electionTimeout + time.Duration(delta))
+	delta := time.Duration(rand.Int63n(int64(max - min)))
+	return time.NewTimer(min + delta).C
 }
