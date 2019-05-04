@@ -22,7 +22,7 @@ type AppendEntriesRequest struct {
 	LogEntries []RaftLogEntry `json:"logEntries,omitempty"`
 }
 
-type AppendEntriesResponseBody struct {
+type AppendEntriesResponse struct {
 	Term    uint64 `json:"term"`
 	Success bool   `json:"success"`
 }
@@ -34,19 +34,27 @@ type RequestVoteRequest struct {
 	LastLogTerm  uint64 `json:"lasstLogTerm"`
 }
 
-type RequestVoteResponseBody struct {
+type RequestVoteResponse struct {
 	Term        uint64 `json:"term"`
 	VoteGranted bool   `json:"voteGranted"`
+	Message     string `json:"message"`
 }
 
 type ShowStatusRequest struct {
 }
 
-type ShowStatusResponseBody struct {
+type ShowStatusResponse struct {
 	Term        uint64          `json:"term"`
 	CommitIndex uint64          `json:"commitIndex"`
 	Peers       map[string]Peer `json:"peers"`
 	State       string          `json:"state"`
+}
+
+type ServerResponse struct {
+	Message string `json:"message"`
+	Term    uint64 `json:"term"`
+	Success bool   `json:"success"`
+	Code    int    `json:"code"`
 }
 
 type RaftLogEntry struct {
@@ -55,8 +63,10 @@ type RaftLogEntry struct {
 	Index  uint64 `json:"index"`
 }
 
-type RaftResponse struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Body    interface{} `json:"body,omitempty"`
+func newRequestVoteResponse(success bool, term uint64, message string) RequestVoteResponse {
+	return RequestVoteResponse{VoteGranted: success, Term: term, Message: message}
+}
+
+func newAppendEntriesResponse(success bool, term uint64) AppendEntriesResponse {
+	return AppendEntriesResponse{Success: success, Term: term}
 }

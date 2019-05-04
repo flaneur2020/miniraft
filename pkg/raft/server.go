@@ -36,11 +36,11 @@ func (s *RaftServer) ListenAndServe() error {
 }
 
 func (s *RaftServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	s.response(w, RaftResponse{Code: SUCCESS, Message: "health"})
+	s.response(w, ServerResponse{Code: SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleStatus(w http.ResponseWriter, r *http.Request) {
-	s.response(w, RaftResponse{Code: SUCCESS, Message: "health"})
+	s.response(w, ServerResponse{Code: SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request) {
@@ -80,12 +80,12 @@ func (s *RaftServer) parseRequest(r *http.Request, target interface{}) error {
 	return nil
 }
 
-func (s *RaftServer) response(w http.ResponseWriter, resp RaftResponse) {
+func (s *RaftServer) response(w http.ResponseWriter, resp interface{}) {
 	buf, err := json.Marshal(resp)
 	if err != nil {
 		s.responseError(w, 500, err.Error())
 	}
-	w.WriteHeader(resp.Code)
+	w.WriteHeader(200)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(buf)
 }

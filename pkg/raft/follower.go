@@ -38,18 +38,18 @@ func (r *Follower) Loop() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request for follower: %v", req)}
+				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for follower: %v", req)}
 			}
 		}
 	}
 }
 
-func (r *Follower) processAppendEntriesRequest(req AppendEntriesRequest) RaftResponse {
-	return RaftResponse{Code: SUCCESS, Message: "success"}
+func (r *Follower) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
+	return AppendEntriesResponse{}
 }
 
-func (r *Follower) processRequestVoteRequest(req RequestVoteRequest) RaftResponse {
-	return RaftResponse{Code: SUCCESS}
+func (r *Follower) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
+	return RequestVoteResponse{}
 }
 
 func (r *Follower) upgradeToCandidate() {

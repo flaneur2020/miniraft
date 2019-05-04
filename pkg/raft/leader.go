@@ -42,18 +42,18 @@ func (r *Leader) Loop() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request for leader: %v", req)}
+				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for leader: %v", req)}
 			}
 		}
 	}
 }
 
-func (r *Leader) processAppendEntriesRequest(req AppendEntriesRequest) RaftResponse {
-	return RaftResponse{Code: BAD_REQUEST, Message: "i'm leader"}
+func (r *Leader) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
+	return AppendEntriesResponse{}
 }
 
-func (r *Leader) processRequestVoteRequest(req RequestVoteRequest) RaftResponse {
-	return RaftResponse{Code: BAD_REQUEST, Message: "i'm leader"}
+func (r *Leader) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
+	return RequestVoteResponse{}
 }
 
 func (r *Leader) broadcastHeartbeats() error {

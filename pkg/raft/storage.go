@@ -82,6 +82,14 @@ func (s *RaftStorage) GetVotedFor() (string, error) {
 	return s.dbGetString([]byte(kVotedFor))
 }
 
+func (s *RaftStorage) MustGetVotedFor() string {
+	v, err := s.GetVotedFor()
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
 func (s *RaftStorage) PutVotedFor(v string) error {
 	return s.dbPutString([]byte(kVotedFor), v)
 }
@@ -133,6 +141,14 @@ func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
 		return nil, err
 	}
 	return &le, nil
+}
+
+func (s *RaftStorage) MustGetLastLogEntry() *RaftLogEntry {
+	le, err := s.GetLastLogEntry()
+	if err != nil {
+		panic(err)
+	}
+	return le
 }
 
 func (s *RaftStorage) dbGetUint64(k []byte) (uint64, error) {

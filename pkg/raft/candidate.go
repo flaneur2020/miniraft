@@ -40,7 +40,7 @@ func (r *Candidate) Loop() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- RaftResponse{Code: 400, Message: fmt.Sprintf("invalid request for candidate: %v", req)}
+				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for candidate: %v", req)}
 			}
 		}
 	}
@@ -51,26 +51,30 @@ func (r *Candidate) Loop() {
 // > claiming to be leader. If the leader’s term (included in its RPC) is at least as large
 // > as the candidate’s current term, then the candidate recognizes the leader as legitimate
 // > and returns to follower state.
-func (r *Candidate) processAppendEntriesRequest(req AppendEntriesRequest) RaftResponse {
+func (r *Candidate) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	if req.Term >= currentTerm {
 		r.followTerm(req.Term)
-		b := &AppendEntriesResponseBody{Term: currentTerm, Success: true}
-		return RaftResponse{Code: SUCCESS, Message: "hello new leader", Body: b}
+		return newAppendEntriesResponse(true, currentTerm)
 	}
-	return RaftResponse{Code: BAD_REQUEST, Message: "i'm candidate"}
+	return newAppendEntriesResponse(false, currentTerm)
 }
 
-func (r *Candidate) processRequestVoteRequest(req RequestVoteRequest) RaftResponse {
-	currentTerm, _ := r.storage.GetCurrentTerm()
+func (r *Candidate) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
+	currentTerm := r.storage.MustGetCurrentTerm()
+	votedFor := r.storage.MustGetVotedFor()
+	// lastLogEntry := r.storage.MustGetLastLogEntry()
+
 	if req.Term < currentTerm {
-		return RaftResponse{Code: BAD_REQUEST, Message: "req.Term < currentTerm"}
+		return newRequestVoteResponse(false, currentTerm, "")
 	}
-	votedFor, _ := r.storage.GetVotedFor()
-	if votedFor == "" || votedFor == req.CandidateID {
-		return RaftResponse{Code: SUCCESS, Message: "congrates!"}
+
+	if req.Term > currentTerm {
+		r.followTerm(req.Term)
+	} else if votedFor == "" || votedFor == req.CandidateID {
+		return newRequestVoteResponse(false, currentTerm, "")
 	}
-	return RaftResponse{Code: BAD_REQUEST, Message: ""}
+	return newRequestVoteResponse(false, currentTerm, "")
 }
 
 // runVote broadcasts the requestVote messages, and collect the vote result asynchronously.
@@ -99,7 +103,7 @@ func (r *Candidate) runVote(grantedC chan bool) error {
 				log.Printf("raft.candidate.send-request-vote target=%s err=%s", id, err)
 				continue
 			}
-			if resp.Code == SUCCESS {
+			if resp.VoteGranted {
 				granted++
 			}
 		}
@@ -149,5 +153,5 @@ func (r *Candidate) buildRequestVoteRequests() (map[string]*RequestVoteRequest, 
 func TimerBetween(min, max time.Duration) *time.Timer {
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	delta := time.Duration(rand.Int63n(int64(max - min)))
-	return time.NewTimer(min + delta).C
+	return time.NewTimer(min + delta)
 }
