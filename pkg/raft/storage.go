@@ -84,9 +84,27 @@ func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	return nil
 }
 
+func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
+	rg := leveldbutil.BytesPrefix([]byte(kLogEntries))
+	rg.Start = []byte(fmt.Sprintf("%s:%s", kLogEntries, uint64ToBytes(index)))
+	iter := s.db.NewIterator(rg, nil)
+	defer iter.Release()
+	es := []RaftLogEntry{}
+	for iter.Next() {
+		buf := iter.Value()
+		le := RaftLogEntry{}
+		err := json.Unmarshal(buf, &le)
+		if err != nil {
+			return nil, err
+		}
+		es = append(es, le)
+	}
+	return es, nil
+}
+
 func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
-	prefix := leveldbutil.BytesPrefix([]byte(kLogEntries))
-	iter := s.db.NewIterator(prefix, nil)
+	rg := leveldbutil.BytesPrefix([]byte(kLogEntries))
+	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
 	exists := iter.Last()
 	if !exists {

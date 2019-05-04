@@ -50,8 +50,12 @@ func (r *Leader) Loop() {
 func (r *Leader) broadcastHeartbeats() {
 }
 
+func (r *Leader) buildLogEntriesForPeer(peerID string) []RaftLogEntry {
+	return nil
+}
+
 func (r *Leader) processAppendEntriesRequest(req AppendEntriesRequest) RaftResponse {
-	return RaftResponse{Code: SUCCESS, Message: "success"}
+	return RaftResponse{Code: BAD_REQUEST, Message: "i'm leader"}
 }
 
 func (r *Leader) processRequestVoteRequest(req RequestVoteRequest) RaftResponse {
