@@ -3,8 +3,6 @@ package raft
 import (
 	"fmt"
 	"log"
-	"math/rand"
-	"time"
 )
 
 type Candidate struct {
@@ -23,7 +21,7 @@ func NewCandidate(r *Raft) *Candidate {
 // 一段时间过后没有赢家
 func (r *Candidate) Loop() {
 	grantedC := make(chan bool)
-	electionTimer := TimerBetween(r.electionTimeout, r.electionTimeout*2)
+	electionTimer := NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
 	r.runElection(grantedC)
 	for r.state == CANDIDATE {
 		select {
@@ -31,7 +29,7 @@ func (r *Candidate) Loop() {
 			r.closeRaft()
 		case <-electionTimer.C:
 			r.runElection(grantedC)
-			electionTimer = TimerBetween(r.electionTimeout, r.electionTimeout*2)
+			electionTimer = NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
 		case granted := <-grantedC:
 			if granted {
 				r.upgradeToLeader()
@@ -150,10 +148,4 @@ func (r *Candidate) buildRequestVoteRequests() (map[string]*RequestVoteRequest, 
 		requests[id] = &req
 	}
 	return requests, nil
-}
-
-func TimerBetween(min, max time.Duration) *time.Timer {
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	delta := time.Duration(rand.Int63n(int64(max - min)))
-	return time.NewTimer(min + delta)
 }
