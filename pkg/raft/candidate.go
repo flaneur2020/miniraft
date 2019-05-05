@@ -17,21 +17,27 @@ func NewCandidate(r *Raft) *Candidate {
 	return c
 }
 
+// After a candidate raise a rote:
+// 它自己赢得选举；
+// 另一台机器宣称自己赢得选举；
+// 一段时间过后没有赢家
 func (r *Candidate) Loop() {
 	grantedC := make(chan bool)
-	r.runVote(grantedC)
 	electionTimer := TimerBetween(r.electionTimeout, r.electionTimeout*2)
+	r.runElection(grantedC)
 	for r.state == CANDIDATE {
 		select {
 		case <-r.closed:
 			r.closeRaft()
 		case <-electionTimer.C:
-			r.runVote(grantedC)
+			r.runElection(grantedC)
+			electionTimer = TimerBetween(r.electionTimeout, r.electionTimeout*2)
 		case granted := <-grantedC:
 			if granted {
 				r.upgradeToLeader()
+				continue
 			} else {
-				electionTimer = TimerBetween(r.electionTimeout, r.electionTimeout*2)
+
 			}
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
@@ -53,8 +59,8 @@ func (r *Candidate) Loop() {
 // > and returns to follower state.
 func (r *Candidate) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
-	if req.Term >= currentTerm {
-		r.followTerm(req.Term)
+	if req.Term > currentTerm {
+		r.setState(FOLLOWER)
 		return newAppendEntriesResponse(true, currentTerm)
 	}
 	return newAppendEntriesResponse(false, currentTerm)
@@ -65,20 +71,28 @@ func (r *Candidate) processRequestVoteRequest(req RequestVoteRequest) RequestVot
 	votedFor := r.storage.MustGetVotedFor()
 	// lastLogEntry := r.storage.MustGetLastLogEntry()
 
+	// if the caller's term smaller than mine, refuse
 	if req.Term < currentTerm {
 		return newRequestVoteResponse(false, currentTerm, "")
 	}
 
+	// if the caller's term bigger than mine: set currentTerm = T, convert to follower
 	if req.Term > currentTerm {
-		r.followTerm(req.Term)
-	} else if votedFor == "" || votedFor == req.CandidateID {
+		r.setState(FOLLOWER)
+		r.storage.PutCurrentTerm(req.Term)
+		r.storage.PutVotedFor(req.CandidateID)
+	}
+
+	// if votedFor is empty or candidateID, and the candidate's log is at least up-to-date as my log, grant vote
+	if votedFor == "" || votedFor == req.CandidateID {
+		// TODO
 		return newRequestVoteResponse(false, currentTerm, "")
 	}
 	return newRequestVoteResponse(false, currentTerm, "")
 }
 
-// runVote broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *Candidate) runVote(grantedC chan bool) error {
+// runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
+func (r *Candidate) runElection(grantedC chan bool) error {
 	// increase candidate's term and vote for itself
 	currentTerm := r.storage.MustGetCurrentTerm()
 	r.storage.PutCurrentTerm(currentTerm + 1)
@@ -115,18 +129,6 @@ func (r *Candidate) runVote(grantedC chan bool) error {
 		}
 	}()
 	return nil
-}
-
-func (r *Candidate) followTerm(term uint64) {
-	currentTerm := r.storage.MustGetCurrentTerm()
-	if !(term >= currentTerm) {
-		panic("must term >= currentTerm")
-	}
-	// degrade to FOLLOWER when found someone's term greater than ours in RequestVote
-	r.setState(FOLLOWER)
-	r.storage.PutCurrentTerm(term)
-	// reset the votedFor after term increased
-	r.storage.PutVotedFor("")
 }
 
 func (r *Candidate) upgradeToLeader() {
