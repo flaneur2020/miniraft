@@ -9,7 +9,6 @@ import (
 type Leader struct {
 	*Raft
 
-	heartbeatTicker    *time.Ticker
 	peerPrevLogIndexes map[string]uint64
 }
 
@@ -22,16 +21,16 @@ func NewLeader(r *Raft) *Leader {
 	l := &Leader{}
 	l.Raft = r
 	l.peerPrevLogIndexes = peerPrevLogIndexes
-	l.heartbeatTicker = time.NewTicker(r.heartbeatInterval)
 	return l
 }
 
 func (r *Leader) Loop() {
+	heartbeatTicker := time.NewTicker(r.heartbeatInterval)
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
 			r.closeRaft()
-		case <-r.heartbeatTicker.C:
+		case <-heartbeatTicker.C:
 			r.broadcastHeartbeats()
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
