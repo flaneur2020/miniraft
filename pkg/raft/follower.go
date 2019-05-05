@@ -3,14 +3,10 @@ package raft
 import (
 	"fmt"
 	"log"
-	"math/rand"
-	"time"
 )
 
 type Follower struct {
 	*Raft
-
-	electionTimer *time.Timer
 }
 
 func NewFollower(r *Raft) *Follower {
@@ -20,19 +16,19 @@ func NewFollower(r *Raft) *Follower {
 }
 
 func (r *Follower) Loop() {
-	r.resetElectionTimer()
+	electionTimer := NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
 	for r.state == FOLLOWER {
 		select {
-		case <-r.electionTimer.C:
+		case <-electionTimer.C:
 			log.Printf("follower.loop.electionTimeout id=%s", r.ID)
-			r.upgradeToCandidate()
+			r.setState(CANDIDATE)
 		case <-r.closed:
 			r.closeRaft()
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
 			case AppendEntriesRequest:
 				r.respc <- r.processAppendEntriesRequest(req)
-				r.resetElectionTimer()
+				electionTimer = NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
 			case RequestVoteRequest:
 				r.respc <- r.processRequestVoteRequest(req)
 			case ShowStatusRequest:
@@ -50,17 +46,4 @@ func (r *Follower) processAppendEntriesRequest(req AppendEntriesRequest) AppendE
 
 func (r *Follower) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
 	return RequestVoteResponse{}
-}
-
-func (r *Follower) upgradeToCandidate() {
-	r.setState(CANDIDATE)
-}
-
-func (r *Follower) resetElectionTimer() {
-	if r.electionTimer == nil {
-		r.electionTimer = time.NewTimer(r.electionTimeout)
-	}
-	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
-	delta := rand.Int63n(int64(r.electionTimeout))
-	r.electionTimer.Reset(r.electionTimeout + time.Duration(delta))
 }
