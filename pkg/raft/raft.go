@@ -21,10 +21,6 @@ type Raft struct {
 	heartbeatInterval time.Duration
 	electionTimeout   time.Duration
 
-	F *Follower
-	L *Leader
-	C *Candidate
-
 	storage *RaftStorage
 
 	reqc   chan interface{}
@@ -68,9 +64,6 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		respc:  make(chan interface{}),
 		closed: make(chan struct{}),
 	}
-	r.F = NewFollower(r)
-	r.L = NewLeader(r)
-	r.C = NewCandidate(r)
 	return r, nil
 }
 
@@ -79,14 +72,98 @@ func (r *Raft) Loop() {
 	for {
 		switch r.state {
 		case FOLLOWER:
-			r.F.Loop()
+			r.loopFollower()
 		case LEADER:
-			r.L.Loop()
+			r.loopLeader()
 		case CANDIDATE:
-			r.C.Loop()
+			r.loopCandidate()
 		case CLOSED:
 			log.Printf("raft.loop.closed id=%s", r.ID)
 			break
+		}
+	}
+}
+
+func (r *Raft) loopFollower() {
+	electionTimer := NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+	for r.state == FOLLOWER {
+		select {
+		case <-electionTimer.C:
+			log.Printf("follower.loop.electionTimeout id=%s", r.ID)
+			r.setState(CANDIDATE)
+		case <-r.closed:
+			r.closeRaft()
+		case ev := <-r.reqc:
+			switch req := ev.(type) {
+			case AppendEntriesRequest:
+				r.respc <- r.processAppendEntriesRequest(req)
+				electionTimer = NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+			case RequestVoteRequest:
+				r.respc <- r.processRequestVoteRequest(req)
+			case ShowStatusRequest:
+				r.respc <- r.processShowStatusRequest(req)
+			default:
+				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for follower: %v", req)}
+			}
+		}
+	}
+}
+
+// After a candidate raise a rote:
+// 它自己赢得选举；
+// 另一台机器宣称自己赢得选举；
+// 一段时间过后没有赢家
+func (r *Raft) loopCandidate() {
+	grantedC := make(chan bool)
+	electionTimer := NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+	r.runElection(grantedC)
+	for r.state == CANDIDATE {
+		select {
+		case <-r.closed:
+			r.closeRaft()
+		case <-electionTimer.C:
+			r.runElection(grantedC)
+			electionTimer = NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+		case granted := <-grantedC:
+			if granted {
+				r.setState(LEADER)
+				continue
+			} else {
+
+			}
+		case ev := <-r.reqc:
+			switch req := ev.(type) {
+			case RequestVoteRequest:
+				r.respc <- r.processRequestVoteRequest(req)
+			case ShowStatusRequest:
+				r.respc <- r.processShowStatusRequest(req)
+			default:
+				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for candidate: %v", req)}
+			}
+		}
+	}
+}
+
+func (r *Raft) loopLeader() {
+	peerPrevLogIndexes := map[string]uint64{} // TODO:
+	heartbeatTicker := time.NewTicker(r.heartbeatInterval)
+	for r.state == LEADER {
+		select {
+		case <-r.closed:
+			r.closeRaft()
+		case <-heartbeatTicker.C:
+			r.broadcastHeartbeats(peerPrevLogIndexes)
+		case ev := <-r.reqc:
+			switch req := ev.(type) {
+			case AppendEntriesRequest:
+				r.respc <- r.processAppendEntriesRequest(req)
+			case RequestVoteRequest:
+				r.respc <- r.processRequestVoteRequest(req)
+			case ShowStatusRequest:
+				r.respc <- r.processShowStatusRequest(req)
+			default:
+				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for leader: %v", req)}
+			}
 		}
 	}
 }
@@ -105,13 +182,4 @@ func (r *Raft) closeRaft() {
 
 func (r *Raft) setState(s string) {
 	r.state = s
-}
-
-func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
-	b := ShowStatusResponse{}
-	b.Term, _ = r.storage.GetCurrentTerm()
-	b.CommitIndex, _ = r.storage.GetCommitIndex()
-	b.Peers = r.peers
-	b.State = r.state
-	return b
 }
