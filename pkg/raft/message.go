@@ -51,10 +51,8 @@ type ShowStatusResponse struct {
 }
 
 type ServerResponse struct {
+	Code    int    `code:"code"`
 	Message string `json:"message"`
-	Term    uint64 `json:"term"`
-	Success bool   `json:"success"`
-	Code    int    `json:"code"`
 }
 
 type RaftLogEntry struct {
@@ -69,4 +67,8 @@ func newRequestVoteResponse(success bool, term uint64, message string) RequestVo
 
 func newAppendEntriesResponse(success bool, term uint64) AppendEntriesResponse {
 	return AppendEntriesResponse{Success: success, Term: term}
+}
+
+func newServerResponse(code int, message string) ServerResponse {
+	return ServerResponse{Code: code, Message: message}
 }

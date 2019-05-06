@@ -103,7 +103,7 @@ func (r *Raft) loopFollower() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for follower: %v", req)}
+				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for follower: %v", req))
 			}
 		}
 	}
@@ -138,7 +138,7 @@ func (r *Raft) loopCandidate() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for candidate: %v", req)}
+				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for candidate: %v", req))
 			}
 		}
 	}
@@ -162,7 +162,7 @@ func (r *Raft) loopLeader() {
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- ServerResponse{Code: 400, Message: fmt.Sprintf("invalid request for leader: %v", req)}
+				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
 			}
 		}
 	}
