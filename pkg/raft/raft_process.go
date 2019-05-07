@@ -26,10 +26,14 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	votedFor := r.storage.MustGetVotedFor()
-	// lastLogEntry := r.storage.MustGetLastLogEntry()
 
 	// if the caller's term smaller than mine, refuse
 	if req.Term < currentTerm {
+		return newRequestVoteResponse(false, currentTerm, "")
+	}
+
+	// if the term is equal and we've already voted for another candidate
+	if req.Term == currentTerm && votedFor != "" && votedFor != req.CandidateID {
 		return newRequestVoteResponse(false, currentTerm, "")
 	}
 
@@ -40,10 +44,12 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 		r.storage.PutVotedFor(req.CandidateID)
 	}
 
-	// if votedFor is empty or candidateID, and the candidate's log is at least up-to-date as my log, grant vote
-	if votedFor == "" || votedFor == req.CandidateID {
-		// TODO
+	// if the candidate's log is not at least as update as our last log
+	lastLogEntry := r.storage.MustGetLastLogEntry()
+	if lastLogEntry.Index > req.LastLogIndex || lastLogEntry.Term > req.LastLogTerm {
 		return newRequestVoteResponse(false, currentTerm, "")
 	}
-	return newRequestVoteResponse(false, currentTerm, "")
+
+	r.storage.PutVotedFor(req.CandidateID)
+	return newRequestVoteResponse(true, currentTerm, "")
 }
