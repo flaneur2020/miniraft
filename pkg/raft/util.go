@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func assert(cond bool, message string) {
+func _assert(cond bool, message string) {
 	if !cond {
 		panic(message)
 	}

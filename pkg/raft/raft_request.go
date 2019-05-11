@@ -2,8 +2,8 @@ package raft
 
 import "log"
 
-func (r *Raft) broadcastHeartbeats(peerPrevLogIndexes map[string]uint64) error {
-	requests, err := r.buildAppendEntriesRequests(peerPrevLogIndexes)
+func (r *Raft) broadcastHeartbeats(nextLogIndexes map[string]uint64) error {
+	requests, err := r.buildAppendEntriesRequests(nextLogIndexes)
 	if err != nil {
 		return err
 	}
@@ -20,7 +20,7 @@ func (r *Raft) broadcastHeartbeats(peerPrevLogIndexes map[string]uint64) error {
 
 // requestVote broadcasts the requestVote messages, and collect the vote result asynchronously.
 func (r *Raft) runElection(grantedC chan bool) error {
-	assert((r.state == CANDIDATE), "should be candidate")
+	_assert((r.state == CANDIDATE), "should be candidate")
 	// increase candidate's term and vote for itself
 	currentTerm := r.storage.MustGetCurrentTerm()
 	r.storage.PutCurrentTerm(currentTerm + 1)
@@ -76,9 +76,9 @@ func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error
 	return requests, nil
 }
 
-func (r *Raft) buildAppendEntriesRequests(peerPrevLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
+func (r *Raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
 	requests := map[string]*AppendEntriesRequest{}
-	for id, idx := range peerPrevLogIndexes {
+	for id, idx := range nextLogIndexes {
 		logEntries, err := r.storage.GetLogEntriesSince(idx)
 		if err != nil {
 			return nil, err

@@ -145,14 +145,14 @@ func (r *Raft) loopCandidate() {
 }
 
 func (r *Raft) loopLeader() {
-	peerPrevLogIndexes := map[string]uint64{} // TODO:
+	nextLogIndexes := map[string]uint64{} // TODO: 初始化为当前最长 log index + 1
 	heartbeatTicker := time.NewTicker(r.heartbeatInterval)
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
 			r.closeRaft()
 		case <-heartbeatTicker.C:
-			r.broadcastHeartbeats(peerPrevLogIndexes)
+			r.broadcastHeartbeats(nextLogIndexes)
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
 			case AppendEntriesRequest:

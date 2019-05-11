@@ -16,10 +16,15 @@ func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusRespons
 // > and returns to follower state.
 func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
-	if req.Term > currentTerm {
-		r.setState(FOLLOWER)
-		return newAppendEntriesResponse(true, currentTerm)
+
+	if req.Term < currentTerm {
+		return newAppendEntriesResponse(false, currentTerm)
 	}
+
+	if req.Term == currentTerm {
+
+	}
+
 	return newAppendEntriesResponse(false, currentTerm)
 }
 
@@ -37,7 +42,7 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 		return newRequestVoteResponse(false, currentTerm, "")
 	}
 
-	// if the caller's term bigger than mine: set currentTerm = T, convert to follower
+	// if the caller's term bigger than my term: set currentTerm = T, convert to follower
 	if req.Term > currentTerm {
 		r.setState(FOLLOWER)
 		r.storage.PutCurrentTerm(req.Term)
