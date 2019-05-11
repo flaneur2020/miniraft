@@ -18,14 +18,31 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 	currentTerm := r.storage.MustGetCurrentTerm()
 
 	if req.Term < currentTerm {
-		return newAppendEntriesResponse(false, currentTerm)
+		return newAppendEntriesResponse(false, currentTerm, "req.Term < currentTerm")
+	} else if req.Term == currentTerm {
+		if r.state == LEADER {
+			return newAppendEntriesResponse(false, currentTerm, "i'm leader")
+		} else if r.state == CANDIDATE {
+			r.setState(FOLLOWER)
+		}
+	} else if req.Term > currentTerm {
+		r.setState(FOLLOWER)
+		r.storage.PutCurrentTerm(req.Term)
+		r.storage.PutVotedFor("")
 	}
 
-	if req.Term == currentTerm {
-
+	lastLogEntry := r.storage.MustGetLastLogEntry()
+	if lastLogEntry.Index != req.PrevLogIndex || lastLogEntry.Term != req.PrevLogTerm {
+		return newAppendEntriesResponse(false, currentTerm, "i'm leader")
 	}
 
-	return newAppendEntriesResponse(false, currentTerm)
+	err := r.storage.AppendLogEntries(req.LogEntries)
+	if err != nil {
+		return newAppendEntriesResponse(false, currentTerm, "failed on append entries")
+	}
+
+	r.storage.PutCommitIndex(req.CommitIndex)
+	return newAppendEntriesResponse(true, currentTerm, "success")
 }
 
 func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
