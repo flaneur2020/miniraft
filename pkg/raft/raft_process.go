@@ -9,23 +9,26 @@ func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusRespons
 	return b
 }
 
-// processAppendEntriesRequest maybe receives the appendEntries from the new leader.
-// > While waiting for votes, a candidate may receive an AppendEntries RPC from another server
-// > claiming to be leader. If the leader’s term (included in its RPC) is at least as large
-// > as the candidate’s current term, then the candidate recognizes the leader as legitimate
-// > and returns to follower state.
 func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 
 	if req.Term < currentTerm {
 		return newAppendEntriesResponse(false, currentTerm, "req.Term < currentTerm")
-	} else if req.Term == currentTerm {
+	}
+
+	if req.Term == currentTerm {
 		if r.state == LEADER {
 			return newAppendEntriesResponse(false, currentTerm, "i'm leader")
-		} else if r.state == CANDIDATE {
+		}
+		if r.state == CANDIDATE {
+			// while waiting for votes, a candidate may receive an AppendEntries RPC from another server claiming to be leader
+			// if the leader's term is at least as large as the candidate's current term, then the candidate recognizes the leader
+			// as legitimate and returns to follower state.
 			r.setState(FOLLOWER)
 		}
-	} else if req.Term > currentTerm {
+	}
+
+	if req.Term > currentTerm {
 		r.setState(FOLLOWER)
 		r.storage.PutCurrentTerm(req.Term)
 		r.storage.PutVotedFor("")
@@ -36,11 +39,7 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 		return newAppendEntriesResponse(false, currentTerm, "i'm leader")
 	}
 
-	err := r.storage.AppendLogEntries(req.LogEntries)
-	if err != nil {
-		return newAppendEntriesResponse(false, currentTerm, "failed on append entries")
-	}
-
+	r.storage.AppendLogEntries(req.LogEntries)
 	r.storage.PutCommitIndex(req.CommitIndex)
 	return newAppendEntriesResponse(true, currentTerm, "success")
 }
