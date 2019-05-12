@@ -13,6 +13,11 @@ const (
 	CLOSED    = "closed"
 )
 
+type Peer struct {
+	ID   string
+	Addr string
+}
+
 type Raft struct {
 	ID    string
 	state string
@@ -21,7 +26,8 @@ type Raft struct {
 	heartbeatInterval time.Duration
 	electionTimeout   time.Duration
 
-	storage *RaftStorage
+	storage   *RaftStorage
+	requester RaftRequester
 
 	reqc   chan interface{}
 	respc  chan interface{}
@@ -52,10 +58,11 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 	}
 
 	r := &Raft{
-		ID:      opt.ID,
-		state:   FOLLOWER,
-		peers:   peers,
-		storage: storage,
+		ID:        opt.ID,
+		state:     FOLLOWER,
+		peers:     peers,
+		storage:   storage,
+		requester: NewRaftRequester(),
 
 		heartbeatInterval: 100 * time.Millisecond,
 		electionTimeout:   20 * time.Second,

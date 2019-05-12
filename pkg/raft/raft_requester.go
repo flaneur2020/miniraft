@@ -9,32 +9,39 @@ import (
 	"time"
 )
 
-type Peer struct {
-	ID   string
-	Addr string
+type RaftRequester interface {
+	SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error)
+	SendAppendEntriesRequest(p Peer, req *AppendEntriesRequest) (*AppendEntriesResponse, error)
 }
 
-func (p *Peer) SendAppendEntriesRequest(request *AppendEntriesRequest) (*AppendEntriesResponse, error) {
+type raftRequester struct {
+}
+
+func NewRaftRequester() RaftRequester {
+	return &raftRequester{}
+}
+
+func (rr *raftRequester) SendAppendEntriesRequest(p Peer, request *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesResponse{}
-	err := p.post(url, request, &resp)
+	err := rr.post(p, url, request, &resp)
 	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (p *Peer) SendRequestVoteRequest(request *RequestVoteRequest) (*RequestVoteResponse, error) {
+func (rr *raftRequester) SendRequestVoteRequest(p Peer, request *RequestVoteRequest) (*RequestVoteResponse, error) {
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteResponse{}
-	err := p.post(url, request, &resp)
+	err := rr.post(p, url, request, &resp)
 	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (p *Peer) post(url string, request interface{}, response interface{}) error {
+func (rr *raftRequester) post(p Peer, url string, request interface{}, response interface{}) error {
 	buf, err := json.Marshal(request)
 	if err != nil {
 		return err

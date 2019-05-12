@@ -9,7 +9,7 @@ func (r *Raft) broadcastHeartbeats(nextLogIndexes map[string]uint64) error {
 	}
 	for id, request := range requests {
 		p := r.peers[id]
-		resp, err := p.SendAppendEntriesRequest(request)
+		resp, err := r.requester.SendAppendEntriesRequest(p, request)
 		if err != nil {
 			return err
 		}
@@ -40,7 +40,7 @@ func (r *Raft) runElection(grantedC chan bool) error {
 		granted := 0
 		for id, req := range requests {
 			p := peers[id]
-			resp, err := p.SendRequestVoteRequest(req)
+			resp, err := r.requester.SendRequestVoteRequest(p, req)
 			if err != nil {
 				log.Printf("raft.candidate.send-request-vote target=%s err=%s", id, err)
 				continue
