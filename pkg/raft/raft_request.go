@@ -79,23 +79,24 @@ func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error
 func (r *Raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
 	requests := map[string]*AppendEntriesRequest{}
 	for id, idx := range nextLogIndexes {
-		logEntries, err := r.storage.GetLogEntriesSince(idx)
-		if err != nil {
-			return nil, err
-		}
 		request := &AppendEntriesRequest{}
 		request.LeaderID = r.ID
-		request.PrevLogIndex = 0
-		request.PrevLogTerm = 0
 		request.LogEntries = []RaftLogEntry{}
-		request.Term, _ = r.storage.GetCurrentTerm()
-		request.CommitIndex, _ = r.storage.GetCommitIndex()
-		if len(logEntries) >= 1 {
-			request.PrevLogIndex = logEntries[0].Index
-			request.PrevLogTerm = logEntries[0].Term
-		}
-		if len(logEntries) >= 2 {
-			request.LogEntries = logEntries[1:]
+		request.Term = r.storage.MustGetCurrentTerm()
+		request.CommitIndex = r.storage.MustGetCommitIndex()
+
+		if idx == 0 {
+			request.PrevLogIndex = 0
+			request.PrevLogTerm = 0
+		} else {
+			logEntries := r.storage.MustGetLogEntriesSince(idx - 1)
+			if len(logEntries) >= 1 {
+				request.PrevLogIndex = logEntries[0].Index
+				request.PrevLogTerm = logEntries[0].Term
+			}
+			if len(logEntries) >= 2 {
+				request.LogEntries = logEntries[1:]
+			}
 		}
 		requests[id] = request
 	}

@@ -66,6 +66,14 @@ func (s *RaftStorage) GetCommitIndex() (uint64, error) {
 	return s.dbGetUint64([]byte(kCommitIndex))
 }
 
+func (s *RaftStorage) MustGetCommitIndex() uint64 {
+	r, err := s.GetCommitIndex()
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
+
 func (s *RaftStorage) PutCommitIndex(v uint64) error {
 	return s.dbPutUint64([]byte(kCommitIndex), v)
 }
@@ -124,6 +132,14 @@ func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
 		es = append(es, le)
 	}
 	return es, nil
+}
+
+func (s *RaftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
+	es, err := s.GetLogEntriesSince(index)
+	if err != nil {
+		panic(err)
+	}
+	return es
 }
 
 func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
