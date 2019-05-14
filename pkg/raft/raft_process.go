@@ -34,9 +34,9 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 		r.storage.PutVotedFor("")
 	}
 
-	lastLogEntry := r.storage.MustGetLastLogEntry()
-	if lastLogEntry.Index != req.PrevLogIndex || lastLogEntry.Term != req.PrevLogTerm {
-		return newAppendEntriesResponse(false, currentTerm, "i'm leader")
+	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+	if lastLogIndex != req.PrevLogIndex || lastLogTerm != req.PrevLogTerm {
+		return newAppendEntriesResponse(false, currentTerm, "log not match")
 	}
 
 	r.storage.AppendLogEntries(req.LogEntries)
@@ -66,8 +66,8 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 	}
 
 	// if the candidate's log is not at least as update as our last log
-	lastLogEntry := r.storage.MustGetLastLogEntry()
-	if lastLogEntry.Index > req.LastLogIndex || lastLogEntry.Term > req.LastLogTerm {
+	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+	if lastLogIndex > req.LastLogIndex || lastLogTerm > req.LastLogTerm {
 		return newRequestVoteResponse(false, currentTerm, "")
 	}
 

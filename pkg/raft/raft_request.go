@@ -60,17 +60,14 @@ func (r *Raft) runElection(grantedC chan bool) error {
 }
 
 func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
-	le, err := r.storage.GetLastLogEntry()
-	if err != nil {
-		return map[string]*RequestVoteRequest{}, err
-	}
+	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 
 	requests := map[string]*RequestVoteRequest{}
 	for id := range r.peers {
 		req := RequestVoteRequest{}
 		req.CandidateID = r.ID
-		req.LastLogIndex = le.Index
-		req.LastLogTerm = le.Term
+		req.LastLogIndex = lastLogIndex
+		req.LastLogTerm = lastLogTerm
 		requests[id] = &req
 	}
 	return requests, nil

@@ -167,6 +167,17 @@ func (s *RaftStorage) MustGetLastLogEntry() *RaftLogEntry {
 	return le
 }
 
+func (s *RaftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
+	le, err := s.GetLastLogEntry()
+	if le == nil && err == nil {
+		return 0, 0
+	}
+	if err != nil {
+		panic(err)
+	}
+	return le.Index, le.Term
+}
+
 func (s *RaftStorage) dbGetUint64(k []byte) (uint64, error) {
 	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
 	buf, err := s.db.Get(key, nil)
