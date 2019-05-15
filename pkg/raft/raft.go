@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/facebookgo/clock"
 )
 
 const (
@@ -25,6 +27,7 @@ type Raft struct {
 
 	heartbeatInterval time.Duration
 	electionTimeout   time.Duration
+	clock             clock.Clock
 
 	storage   *RaftStorage
 	requester RaftRequester
@@ -66,6 +69,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 
 		heartbeatInterval: 100 * time.Millisecond,
 		electionTimeout:   20 * time.Second,
+		clock:             clock.New(),
 
 		reqc:   make(chan interface{}),
 		respc:  make(chan interface{}),
@@ -92,7 +96,7 @@ func (r *Raft) Loop() {
 }
 
 func (r *Raft) loopFollower() {
-	electionTimer := NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+	electionTimer := r.newElectionTimer()
 	for r.state == FOLLOWER {
 		select {
 		case <-electionTimer.C:
@@ -104,7 +108,7 @@ func (r *Raft) loopFollower() {
 			switch req := ev.(type) {
 			case AppendEntriesRequest:
 				r.respc <- r.processAppendEntriesRequest(req)
-				electionTimer = NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+				electionTimer = r.newElectionTimer()
 			case RequestVoteRequest:
 				r.respc <- r.processRequestVoteRequest(req)
 			case ShowStatusRequest:
@@ -122,7 +126,7 @@ func (r *Raft) loopFollower() {
 // 一段时间过后没有赢家
 func (r *Raft) loopCandidate() {
 	grantedC := make(chan bool)
-	electionTimer := NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+	electionTimer := r.newElectionTimer()
 	r.runElection(grantedC)
 	for r.state == CANDIDATE {
 		select {
@@ -130,7 +134,7 @@ func (r *Raft) loopCandidate() {
 			r.closeRaft()
 		case <-electionTimer.C:
 			r.runElection(grantedC)
-			electionTimer = NewTimerBetween(r.electionTimeout, r.electionTimeout*2)
+			electionTimer = r.newElectionTimer()
 		case granted := <-grantedC:
 			if granted {
 				r.setState(LEADER)
@@ -153,7 +157,7 @@ func (r *Raft) loopCandidate() {
 
 func (r *Raft) loopLeader() {
 	nextLogIndexes := map[string]uint64{} // TODO: 初始化为当前最长 log index + 1
-	heartbeatTicker := time.NewTicker(r.heartbeatInterval)
+	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
@@ -189,4 +193,8 @@ func (r *Raft) closeRaft() {
 
 func (r *Raft) setState(s string) {
 	r.state = s
+}
+
+func (r *Raft) newElectionTimer() *clock.Timer {
+	return NewTimerBetween(r.clock, r.electionTimeout, r.electionTimeout*2)
 }
