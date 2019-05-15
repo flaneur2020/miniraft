@@ -36,9 +36,10 @@ type RequestVoteRequest struct {
 }
 
 type RequestVoteResponse struct {
-	Term        uint64 `json:"term"`
-	VoteGranted bool   `json:"voteGranted"`
-	Message     string `json:"message"`
+	Term         uint64 `json:"term"`
+	VoteGranted  bool   `json:"voteGranted"`
+	LastLogIndex uint64 `json:"last_log_index"`
+	Message      string `json:"message"`
 }
 
 type ShowStatusRequest struct {
@@ -62,8 +63,8 @@ type RaftLogEntry struct {
 	Index  uint64 `json:"index"`
 }
 
-func newRequestVoteResponse(success bool, term uint64, message string) RequestVoteResponse {
-	return RequestVoteResponse{VoteGranted: success, Term: term, Message: message}
+func newRequestVoteResponse(success bool, term uint64, lastLogIndex uint64, message string) RequestVoteResponse {
+	return RequestVoteResponse{VoteGranted: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
 }
 
 func newAppendEntriesResponse(success bool, term uint64, message string) AppendEntriesResponse {

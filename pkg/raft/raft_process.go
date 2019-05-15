@@ -47,15 +47,16 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	votedFor := r.storage.MustGetVotedFor()
+	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 
 	// if the caller's term smaller than mine, refuse
 	if req.Term < currentTerm {
-		return newRequestVoteResponse(false, currentTerm, "")
+		return newRequestVoteResponse(false, currentTerm, lastLogIndex, "")
 	}
 
 	// if the term is equal and we've already voted for another candidate
 	if req.Term == currentTerm && votedFor != "" && votedFor != req.CandidateID {
-		return newRequestVoteResponse(false, currentTerm, "")
+		return newRequestVoteResponse(false, currentTerm, lastLogIndex, "")
 	}
 
 	// if the caller's term bigger than my term: set currentTerm = T, convert to follower
@@ -66,11 +67,10 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 	}
 
 	// if the candidate's log is not at least as update as our last log
-	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	if lastLogIndex > req.LastLogIndex || lastLogTerm > req.LastLogTerm {
-		return newRequestVoteResponse(false, currentTerm, "")
+		return newRequestVoteResponse(false, currentTerm, lastLogIndex, "")
 	}
 
 	r.storage.PutVotedFor(req.CandidateID)
-	return newRequestVoteResponse(true, currentTerm, "")
+	return newRequestVoteResponse(true, currentTerm, lastLogIndex, "")
 }
