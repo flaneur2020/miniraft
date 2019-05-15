@@ -3,7 +3,6 @@ a copycat implementation to learn raft
 todo
 
 - [ ] truncateSince
-- [ ] 抽 ticker 对象: https://godoc.org/github.com/facebookgo/clock
 - [ ] 异步响应 append log
 - [ ] 写 command 请求
 

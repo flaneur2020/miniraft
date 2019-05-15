@@ -105,7 +105,7 @@ func (s *RaftStorage) PutVotedFor(v string) error {
 func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	batch := new(leveldb.Batch)
 	for _, le := range entries {
-		k := []byte(fmt.Sprintf("%s:%s", kLogEntries, uint64ToBytes(le.Index)))
+		k := makeLogEntryKey(le.Index)
 		v, _ := json.Marshal(le)
 		batch.Put(k, v)
 	}
@@ -118,7 +118,7 @@ func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 
 func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
 	rg := leveldbutil.BytesPrefix([]byte(kLogEntries))
-	rg.Start = []byte(fmt.Sprintf("%s:%s", kLogEntries, uint64ToBytes(index)))
+	rg.Start = makeLogEntryKey(index)
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
 	es := []RaftLogEntry{}
@@ -140,6 +140,18 @@ func (s *RaftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
 		panic(err)
 	}
 	return es
+}
+
+func (s *RaftStorage) MustTruncateSince(index uint64) {
+	entries := s.MustGetLogEntriesSince(index)
+	batch := new(leveldb.Batch)
+	for _, entry := range entries {
+		batch.Delete(makeLogEntryKey(entry.Index))
+	}
+	err := s.db.Write(batch, nil)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
@@ -207,6 +219,10 @@ func (s *RaftStorage) dbGetString(k []byte) (string, error) {
 func (s *RaftStorage) dbPutString(k []byte, v string) error {
 	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
 	return s.db.Put(key, []byte(v), nil)
+}
+
+func makeLogEntryKey(index uint64) []byte {
+	return []byte(fmt.Sprintf("%s:%s", kLogEntries, uint64ToBytes(index)))
 }
 
 // uint64ToBytes converts an uint64 number to a lexicographically order bytes
