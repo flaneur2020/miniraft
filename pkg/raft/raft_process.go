@@ -34,11 +34,12 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 		r.storage.PutVotedFor("")
 	}
 
-	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
-	if lastLogIndex != req.PrevLogIndex || lastLogTerm != req.PrevLogTerm {
+	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
+	if req.PrevLogIndex > lastLogIndex {
 		return newAppendEntriesResponse(false, currentTerm, "log not match")
 	}
 
+	// TODO: truncate earlier log
 	r.storage.AppendLogEntries(req.LogEntries)
 	r.storage.PutCommitIndex(req.CommitIndex)
 	return newAppendEntriesResponse(true, currentTerm, "success")
