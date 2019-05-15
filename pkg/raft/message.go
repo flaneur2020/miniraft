@@ -23,9 +23,10 @@ type AppendEntriesRequest struct {
 }
 
 type AppendEntriesResponse struct {
-	Term    uint64 `json:"term"`
-	Success bool   `json:"success"`
-	Message string `json:"message"`
+	Term         uint64 `json:"term"`
+	Success      bool   `json:"success"`
+	Message      string `json:"message"`
+	LastLogIndex uint64 `json:"last_log_index"`
 }
 
 type RequestVoteRequest struct {
@@ -66,8 +67,8 @@ func newRequestVoteResponse(success bool, term uint64, message string) RequestVo
 	return RequestVoteResponse{VoteGranted: success, Term: term, Message: message}
 }
 
-func newAppendEntriesResponse(success bool, term uint64, message string) AppendEntriesResponse {
-	return AppendEntriesResponse{Success: success, Term: term, Message: message}
+func newAppendEntriesResponse(success bool, term uint64, lastLogIndex uint64, message string) AppendEntriesResponse {
+	return AppendEntriesResponse{Success: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
 }
 
 func newServerResponse(code int, message string) ServerResponse {

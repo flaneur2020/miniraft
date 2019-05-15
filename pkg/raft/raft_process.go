@@ -11,14 +11,15 @@ func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusRespons
 
 func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
+	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
 	if req.Term < currentTerm {
-		return newAppendEntriesResponse(false, currentTerm, "req.Term < currentTerm")
+		return newAppendEntriesResponse(false, currentTerm, lastLogIndex, "req.Term < currentTerm")
 	}
 
 	if req.Term == currentTerm {
 		if r.state == LEADER {
-			return newAppendEntriesResponse(false, currentTerm, "i'm leader")
+			return newAppendEntriesResponse(false, currentTerm, lastLogIndex, "i'm leader")
 		}
 		if r.state == CANDIDATE {
 			// while waiting for votes, a candidate may receive an AppendEntries RPC from another server claiming to be leader
@@ -34,9 +35,8 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 		r.storage.PutVotedFor("")
 	}
 
-	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 	if req.PrevLogIndex > lastLogIndex {
-		return newAppendEntriesResponse(false, currentTerm, "log not match")
+		return newAppendEntriesResponse(false, currentTerm, lastLogIndex, "log not match")
 	}
 
 	if req.PrevLogIndex < lastLogIndex {
@@ -45,7 +45,9 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 
 	r.storage.AppendLogEntries(req.LogEntries)
 	r.storage.PutCommitIndex(req.CommitIndex)
-	return newAppendEntriesResponse(true, currentTerm, "success")
+
+	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
+	return newAppendEntriesResponse(true, currentTerm, lastLogIndex, "success")
 }
 
 func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
