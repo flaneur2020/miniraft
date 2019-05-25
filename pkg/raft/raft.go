@@ -172,6 +172,8 @@ func (r *Raft) loopLeader() {
 				r.respc <- r.processRequestVoteRequest(req)
 			case ShowStatusRequest:
 				r.respc <- r.processShowStatusRequest(req)
+			case KvRequest:
+				r.respc <- r.processKvRequest(req)
 			default:
 				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
 			}

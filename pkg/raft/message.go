@@ -9,7 +9,8 @@ const (
 
 const (
 	kNop    = "nop"
-	kUpdate = "update"
+	kPut    = "put"
+	kGet    = "get"
 	kDelete = "delete"
 )
 
@@ -54,14 +55,14 @@ type ShowStatusResponse struct {
 }
 
 type KvRequest struct {
-	OpType int    `json:"opType"`
-	Key    string `json:"key"`
-	Value  string `json:"value,omitempty"`
+	OpType string `json:"opType"`
+	Key    []byte `json:"key"`
+	Value  []byte `json:"value,omitempty"`
 }
 
 type KvResponse struct {
-	Success bool   `json:"success"`
-	Value   string `json:"value,omitempty"`
+	Message string `json:"message"`
+	Value   []byte `json:"value,omitempty"`
 }
 
 type ServerResponse struct {

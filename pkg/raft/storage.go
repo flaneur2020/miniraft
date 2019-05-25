@@ -6,7 +6,8 @@ import (
 	"fmt"
 
 	"github.com/syndtr/goleveldb/leveldb"
-	leveldbutil "github.com/syndtr/goleveldb/leveldb/util"
+	lerrors "github.com/syndtr/goleveldb/leveldb/errors"
+	lutil "github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -44,6 +45,33 @@ func (s *RaftStorage) Reset() {
 
 func (s *RaftStorage) Close() {
 	s.db.Close()
+}
+
+func (s *RaftStorage) MustPutKv(key []byte, value []byte) {
+	k := []byte(fmt.Sprintf("d:%s", key))
+	err := s.db.Put(k, value, nil)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (s *RaftStorage) MustGetKv(key []byte) ([]byte, bool) {
+	k := []byte(fmt.Sprintf("d:%s", key))
+	buf, err := s.db.Get(k, nil)
+	if err == lerrors.ErrNotFound {
+		return []byte{}, false
+	} else if err != nil {
+		panic(err)
+	}
+	return buf, true
+}
+
+func (s *RaftStorage) MustDeleteKv(key []byte, value []byte) {
+	k := []byte(fmt.Sprintf("d:%s", key))
+	err := s.db.Delete(k, nil)
+	if err != lerrors.ErrNotFound {
+		panic(err)
+	}
 }
 
 func (s *RaftStorage) GetCurrentTerm() (uint64, error) {
@@ -117,7 +145,7 @@ func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 }
 
 func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
-	rg := leveldbutil.BytesPrefix([]byte(kLogEntries))
+	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	rg.Start = makeLogEntryKey(index)
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
@@ -155,7 +183,7 @@ func (s *RaftStorage) MustTruncateSince(index uint64) {
 }
 
 func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
-	rg := leveldbutil.BytesPrefix([]byte(kLogEntries))
+	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
 	exists := iter.Last()

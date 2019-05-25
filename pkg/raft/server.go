@@ -67,6 +67,18 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 	s.response(w, resp)
 }
 
+func (s *RaftServer) handleKv(w http.ResponseWriter, r *http.Request) {
+	req := KvRequest{}
+	err := s.parseRequest(r, &req)
+	if err != nil {
+		s.responseError(w, 400, err.Error())
+		return
+	}
+	s.raft.reqc <- req
+	resp := <-s.raft.respc
+	s.response(w, resp)
+}
+
 func (s *RaftServer) parseRequest(r *http.Request, target interface{}) error {
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {

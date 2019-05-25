@@ -1,5 +1,7 @@
 package raft
 
+import "fmt"
+
 func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
 	b := ShowStatusResponse{}
 	b.Term, _ = r.storage.GetCurrentTerm()
@@ -79,4 +81,21 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 
 	r.storage.PutVotedFor(req.CandidateID)
 	return newRequestVoteResponse(true, currentTerm, "")
+}
+
+func (r *Raft) processKvRequest(req KvRequest) KvResponse {
+	switch req.OpType {
+	case kNop:
+		return KvResponse{Value: []byte{}, Message: "nop"}
+	case kPut:
+		return KvResponse{Value: []byte{}, Message: "success"}
+	case kGet:
+		v, exists := r.storage.MustGetKv(req.Key)
+		if !exists {
+			return KvResponse{Value: nil, Message: "not found"}
+		}
+		return KvResponse{Value: v, Message: "success"}
+	default:
+		panic(fmt.Sprintf("unexpected opType: %s", req.OpType))
+	}
 }
