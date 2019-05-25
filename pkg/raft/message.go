@@ -8,8 +8,9 @@ const (
 )
 
 const (
-	OP_WRTIE  = 1
-	OP_DELETE = 2
+	kNop    = "nop"
+	kUpdate = "update"
+	kDelete = "delete"
 )
 
 type AppendEntriesRequest struct {
@@ -52,13 +53,24 @@ type ShowStatusResponse struct {
 	State       string          `json:"state"`
 }
 
+type KvRequest struct {
+	OpType int    `json:"opType"`
+	Key    string `json:"key"`
+	Value  string `json:"value,omitempty"`
+}
+
+type KvResponse struct {
+	Success bool   `json:"success"`
+	Value   string `json:"value,omitempty"`
+}
+
 type ServerResponse struct {
 	Code    int    `code:"code"`
 	Message string `json:"message"`
 }
 
 type RaftLogEntry struct {
-	OpType int    `json:"opType"`
+	OpType string `json:"cmdType"`
 	Term   uint64 `json:"term"`
 	Index  uint64 `json:"index"`
 }

@@ -2,9 +2,9 @@ a copycat implementation to learn raft
 
 todo
 
-- [ ] truncateSince
-- [ ] 异步响应 append log
 - [ ] 写 command 请求
+- [ ] test
+- [ ] 异步响应 append log
 
 references
 
