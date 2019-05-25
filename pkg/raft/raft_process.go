@@ -83,19 +83,21 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 	return newRequestVoteResponse(true, currentTerm, "")
 }
 
-func (r *Raft) processKvRequest(req KvRequest) KvResponse {
-	switch req.OpType {
+func (r *Raft) processCommandRequest(req CommandRequest) CommandResponse {
+	switch req.Command.OpType {
 	case kNop:
-		return KvResponse{Value: []byte{}, Message: "nop"}
+		return CommandResponse{Value: []byte{}, Message: "nop"}
 	case kPut:
-		return KvResponse{Value: []byte{}, Message: "success"}
+		logIndex, _ := r.storage.AppendLogEntriesByCommands([]RaftCommand{req.Command})
+		// TODO: await logIndex got commit
+		return CommandResponse{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 	case kGet:
-		v, exists := r.storage.MustGetKv(req.Key)
+		v, exists := r.storage.MustGetKv(req.Command.Key)
 		if !exists {
-			return KvResponse{Value: nil, Message: "not found"}
+			return CommandResponse{Value: nil, Message: "not found"}
 		}
-		return KvResponse{Value: v, Message: "success"}
+		return CommandResponse{Value: v, Message: "success"}
 	default:
-		panic(fmt.Sprintf("unexpected opType: %s", req.OpType))
+		panic(fmt.Sprintf("unexpected opType: %s", req.Command.OpType))
 	}
 }

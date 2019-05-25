@@ -54,26 +54,30 @@ type ShowStatusResponse struct {
 	State       string          `json:"state"`
 }
 
-type KvRequest struct {
-	OpType string `json:"opType"`
-	Key    []byte `json:"key"`
-	Value  []byte `json:"value,omitempty"`
-}
-
-type KvResponse struct {
-	Message string `json:"message"`
-	Value   []byte `json:"value,omitempty"`
-}
-
 type ServerResponse struct {
 	Code    int    `code:"code"`
 	Message string `json:"message"`
 }
 
+type CommandRequest struct {
+	Command RaftCommand `json:"command"`
+}
+
+type CommandResponse struct {
+	Message string `json:"message"`
+	Value   []byte `json:"value,omitempty"`
+}
+
+type RaftCommand struct {
+	OpType string `json:"opType"`
+	Key    []byte `json:"key"`
+	Value  []byte `json:"value,omitempty"`
+}
+
 type RaftLogEntry struct {
-	OpType string `json:"cmdType"`
-	Term   uint64 `json:"term"`
-	Index  uint64 `json:"index"`
+	Term    uint64      `json:"term"`
+	Index   uint64      `json:"index"`
+	Command RaftCommand `json:"command"`
 }
 
 func newRequestVoteResponse(success bool, term uint64, message string) RequestVoteResponse {

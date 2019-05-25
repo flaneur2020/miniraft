@@ -24,6 +24,7 @@ func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
 	m.HandleFunc("/health", s.handleHealth)
 	m.HandleFunc("/_raft/append-entries", s.handleAppendEntries)
 	m.HandleFunc("/_raft/request-vote", s.handleRequestVote)
+	m.HandleFunc("/_raft/command", s.handleCommand)
 	m.HandleFunc("/_raft/status", s.handleStatus)
 	s.httpServer = &http.Server{Addr: opt.ListenAddr, Handler: m}
 	return s, nil
@@ -67,8 +68,8 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 	s.response(w, resp)
 }
 
-func (s *RaftServer) handleKv(w http.ResponseWriter, r *http.Request) {
-	req := KvRequest{}
+func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
+	req := CommandRequest{}
 	err := s.parseRequest(r, &req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())

@@ -144,6 +144,23 @@ func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	return nil
 }
 
+func (s *RaftStorage) AppendLogEntriesByCommands(commands []RaftCommand) (uint64, error) {
+	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
+	term := s.MustGetCurrentTerm()
+	es := []RaftLogEntry{}
+	for _, cmd := range commands {
+		le := RaftLogEntry{
+			Index:   lastIndex + 1,
+			Term:    term,
+			Command: cmd,
+		}
+		lastIndex++
+		es = append(es, le)
+	}
+	err := s.AppendLogEntries(es)
+	return lastIndex, err
+}
+
 func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	rg.Start = makeLogEntryKey(index)
