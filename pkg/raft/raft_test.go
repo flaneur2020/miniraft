@@ -21,5 +21,7 @@ func Test_NewRaft(t *testing.T) {
 	r, err := NewRaft(opt)
 	assert.Nil(t, err)
 	assert.Equal(t, r.ID, opt.ID)
-	assert.Equal(t, r.peers["r1"], Peer{ID: "r1", Addr: "192.168.0.1:4501"})
+	assert.Equal(t, r.state, FOLLOWER)
+	assert.Equal(t, len(r.peers), 2)
+	assert.Equal(t, r.peers["r2"], Peer{ID: "r2", Addr: "192.168.0.1:4502"})
 }
