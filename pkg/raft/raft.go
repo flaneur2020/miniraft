@@ -60,22 +60,19 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		return nil, err
 	}
 
-	r := &Raft{
-		ID:        opt.ID,
-		state:     FOLLOWER,
-		peers:     peers,
-		storage:   storage,
-		requester: NewRaftRequester(),
-
-		heartbeatInterval: 100 * time.Millisecond,
-		electionTimeout:   5 * time.Second,
-		clock:             clock.New(),
-
-		reqc:   make(chan interface{}),
-		respc:  make(chan interface{}),
-		closed: make(chan struct{}),
-	}
+	r := &Raft{}
+	r.ID = opt.ID
+	r.state = FOLLOWER
+	r.heartbeatInterval = 100 * time.Millisecond
+	r.electionTimeout = 5 * time.Second
+	r.peers = peers
+	r.storage = storage
+	r.clock = clock.New()
 	r.logger = NewRaftLogger(r, DEBUG)
+	r.requester = NewRaftRequester(r.logger)
+	r.reqc = make(chan interface{})
+	r.respc = make(chan interface{})
+	r.closed = make(chan struct{})
 	return r, nil
 }
 

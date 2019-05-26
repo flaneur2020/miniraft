@@ -2,9 +2,8 @@ a copycat implementation to learn raft
 
 todo
 
-- [ ] 写 command 请求
-- [ ] test
 - [ ] 异步响应 append log
+- [ ] commit command
 
 references
 

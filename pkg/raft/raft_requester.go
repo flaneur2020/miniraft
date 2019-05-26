@@ -15,16 +15,18 @@ type RaftRequester interface {
 }
 
 type raftRequester struct {
+	logger *RaftLogger
 }
 
-func NewRaftRequester() RaftRequester {
-	return &raftRequester{}
+func NewRaftRequester(logger *RaftLogger) RaftRequester {
+	return &raftRequester{logger: logger}
 }
 
 func (rr *raftRequester) SendAppendEntriesRequest(p Peer, request *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesResponse{}
 	err := rr.post(p, url, request, &resp)
+	rr.logger.Debugf("raft.request.send-append-entries to=%s req=%#v err=%s", p.ID, request, err)
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +37,7 @@ func (rr *raftRequester) SendRequestVoteRequest(p Peer, request *RequestVoteRequ
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteResponse{}
 	err := rr.post(p, url, request, &resp)
+	rr.logger.Debugf("raft.request.send-request vote to=%s req=%#v err=%s", p.ID, request, err)
 	if err != nil {
 		return nil, err
 	}
