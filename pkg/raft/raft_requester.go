@@ -66,3 +66,21 @@ func (rr *raftRequester) post(p Peer, url string, request interface{}, response 
 	}
 	return nil
 }
+
+type mockRaftRequester struct {
+	rafts map[string]*Raft
+}
+
+func (r *mockRaftRequester) SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error) {
+	raft := r.rafts[p.ID]
+	raft.reqc <- *req
+	resp := (<-raft.respc).(RequestVoteResponse)
+	return &resp, nil
+}
+
+func (r *mockRaftRequester) SendAppendEntriesRequest(p Peer, req *AppendEntriesRequest) (*AppendEntriesResponse, error) {
+	raft := r.rafts[p.ID]
+	raft.reqc <- *req
+	resp := (<-raft.respc).(AppendEntriesResponse)
+	return &resp, nil
+}
