@@ -78,7 +78,7 @@ func Test_RaftRequest(t *testing.T) {
 	assert.Equal(t, raft2.state, FOLLOWER)
 	assert.Equal(t, raft3.state, FOLLOWER)
 
-	clock.Add(7 * time.Second)
+	clock.Add(5 * time.Second)
 
-	time.Sleep(5)
+	time.Sleep(30)
 }

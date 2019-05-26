@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 )
 
@@ -31,7 +30,7 @@ func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
 }
 
 func (s *RaftServer) ListenAndServe() error {
-	log.Printf("server start: listen=%s", s.listenAddr)
+	s.raft.logger.Infof("server start: listen=%s", s.listenAddr)
 	go s.raft.Loop()
 	return s.httpServer.ListenAndServe()
 }
@@ -112,7 +111,7 @@ func (s *RaftServer) responseError(w http.ResponseWriter, code int, message stri
 }
 
 func (s *RaftServer) Shutdown() error {
-	log.Printf("closing raft server: listen=%s", s.listenAddr)
+	s.raft.logger.Infof("closing raft server: listen=%s", s.listenAddr)
 	s.raft.Shutdown()
 	ctx := context.TODO()
 	return s.httpServer.Shutdown(ctx)

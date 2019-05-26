@@ -2,7 +2,6 @@ package raft
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/facebookgo/clock"
@@ -29,6 +28,7 @@ type Raft struct {
 	electionTimeout   time.Duration
 	clock             clock.Clock
 
+	logger    *RaftLogger
 	storage   *RaftStorage
 	requester RaftRequester
 
@@ -75,11 +75,12 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		respc:  make(chan interface{}),
 		closed: make(chan struct{}),
 	}
+	r.logger = NewRaftLogger(r, DEBUG)
 	return r, nil
 }
 
 func (r *Raft) Loop() {
-	log.Printf("[%s] raft.loop.start: state=%s storage=%s peers=%v", r.ID, r.state, r.storage.path, r.peers)
+	r.logger.Debugf("raft.loop.start: storage=%s peers=%v", r.storage.path, r.peers)
 	for {
 		switch r.state {
 		case FOLLOWER:
@@ -89,7 +90,7 @@ func (r *Raft) Loop() {
 		case CANDIDATE:
 			r.loopCandidate()
 		case CLOSED:
-			log.Printf("[%s] raft.loop.closed", r.ID)
+			r.logger.Debugf("raft.loop.closed")
 			break
 		}
 	}
@@ -100,7 +101,7 @@ func (r *Raft) loopFollower() {
 	for r.state == FOLLOWER {
 		select {
 		case <-electionTimer.C:
-			log.Printf("[%s] follower.loop.electionTimeout", r.ID)
+			r.logger.Debugf("follower.loop.electionTimeout")
 			r.setState(CANDIDATE)
 		case <-r.closed:
 			r.closeRaft()
@@ -182,7 +183,7 @@ func (r *Raft) loopLeader() {
 }
 
 func (r *Raft) Shutdown() {
-	log.Printf("[%s] raft.shutdown", r.ID)
+	r.logger.Debugf("raft.shutdown")
 	close(r.closed)
 }
 
@@ -194,7 +195,7 @@ func (r *Raft) closeRaft() {
 }
 
 func (r *Raft) setState(s string) {
-	log.Printf("[%s] raft.setState state=%s", r.ID, s)
+	r.logger.Debugf("raft.setState state=%s", s)
 	r.state = s
 }
 

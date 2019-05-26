@@ -1,7 +1,5 @@
 package raft
 
-import "log"
-
 func (r *Raft) broadcastHeartbeats(nextLogIndexes map[string]uint64) error {
 	requests, err := r.buildAppendEntriesRequests(nextLogIndexes)
 	if err != nil {
@@ -13,7 +11,7 @@ func (r *Raft) broadcastHeartbeats(nextLogIndexes map[string]uint64) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("raft.leader.append-entries resp=%-v", resp)
+		r.logger.Debugf("raft.leader.append-entries resp=%-v", resp)
 	}
 	return nil
 }
@@ -25,12 +23,12 @@ func (r *Raft) runElection(grantedC chan bool) error {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	r.storage.PutCurrentTerm(currentTerm + 1)
 	r.storage.PutVotedFor(r.ID)
-	log.Printf("[%s] raft.candidate.vote term=%d votedFor=%s", r.ID, currentTerm, r.ID)
+	r.logger.Debugf("raft.candidate.vote term=%d votedFor=%s", currentTerm, r.ID)
 
 	// send requestVote requests asynchronously, collect the vote results into grantedC
 	requests, err := r.buildRequestVoteRequests()
 	if err != nil {
-		log.Printf("[%s] raft.candidate.vote.buildRequestVoteRequests rr=%s", r.ID, err)
+		r.logger.Debugf("raft.candidate.vote.buildRequestVoteRequests err=%s", err)
 		return err
 	}
 	peers := map[string]Peer{}
@@ -43,14 +41,14 @@ func (r *Raft) runElection(grantedC chan bool) error {
 			p := peers[id]
 			resp, err := r.requester.SendRequestVoteRequest(p, req)
 			if err != nil {
-				log.Printf("raft.candidate.send-request-vote target=%s err=%s", id, err)
+				r.logger.Debugf("raft.candidate.send-request-vote target=%s err=%s", id, err)
 				continue
 			}
 			if resp.VoteGranted {
 				granted++
 			}
 		}
-		log.Printf("raft.candidate.broadcast-request-vote granted=%d total=%d", granted, len(r.peers))
+		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d", granted, len(r.peers))
 		if granted*2 > len(peers) {
 			grantedC <- true
 		} else {
