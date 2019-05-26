@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"log"
 	"testing"
 
 	"github.com/facebookgo/clock"
@@ -9,9 +10,9 @@ import (
 
 func makeRaftInstances() (*Raft, *Raft, *Raft) {
 	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
-	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raft01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
-	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
-	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raft03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
+	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raft-01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
+	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft-02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
+	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raft-03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
 
 	raft1, _ := NewRaft(opt1)
 	raft2, _ := NewRaft(opt2)
@@ -28,6 +29,10 @@ func makeRaftInstances() (*Raft, *Raft, *Raft) {
 
 	raft3.requester = requester
 	raft3.clock = clock
+
+	go raft1.Loop()
+	go raft2.Loop()
+	go raft3.Loop()
 
 	return raft1, raft2, raft3
 }
@@ -50,4 +55,17 @@ func Test_NewRaft(t *testing.T) {
 	assert.Equal(t, r.state, FOLLOWER)
 	assert.Equal(t, len(r.peers), 2)
 	assert.Equal(t, r.peers["r2"], Peer{ID: "r2", Addr: "192.168.0.1:4502"})
+}
+
+func Test_RaftRequest(t *testing.T) {
+	raft1, raft2, raft3 := makeRaftInstances()
+	defer func() {
+		raft1.Shutdown()
+		raft2.Shutdown()
+		raft3.Shutdown()
+	}()
+
+	req := &AppendEntriesRequest{}
+	resp, _ := raft1.requester.SendAppendEntriesRequest(raft1.peers["r2"], req)
+	log.Printf("resp: %#v", resp)
 }

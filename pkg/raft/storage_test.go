@@ -17,7 +17,7 @@ func Test_GetLastLogEntry(t *testing.T) {
 	err = s.AppendLogEntries(es)
 	assert.Nil(t, err)
 
-	le, err := s.GetLastLogEntry()
+	le, err := s.getLastLogEntry()
 	assert.Nil(t, err)
 	assert.Equal(t, le.Index, uint64(2))
 }
@@ -33,15 +33,12 @@ func Test_GetLogEntriesSince(t *testing.T) {
 	err = s.AppendLogEntries(es)
 	assert.Nil(t, err)
 
-	es, err = s.GetLogEntriesSince(3)
-	assert.Nil(t, err)
+	es = s.MustGetLogEntriesSince(3)
 	assert.Equal(t, len(es), 0)
 
-	es, err = s.GetLogEntriesSince(0)
-	assert.Nil(t, err)
+	es = s.MustGetLogEntriesSince(0)
 	assert.Equal(t, len(es), 3)
 
-	es, err = s.GetLogEntriesSince(2)
-	assert.Nil(t, err)
+	es = s.MustGetLogEntriesSince(2)
 	assert.Equal(t, len(es), 1)
 }

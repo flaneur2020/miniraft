@@ -4,8 +4,8 @@ import "fmt"
 
 func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
 	b := ShowStatusResponse{}
-	b.Term, _ = r.storage.GetCurrentTerm()
-	b.CommitIndex, _ = r.storage.GetCommitIndex()
+	b.Term = r.storage.MustGetCurrentTerm()
+	b.CommitIndex = r.storage.MustGetCommitIndex()
 	b.Peers = r.peers
 	b.State = r.state
 	return b

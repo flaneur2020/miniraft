@@ -74,13 +74,11 @@ func (s *RaftStorage) MustDeleteKv(key []byte, value []byte) {
 	}
 }
 
-func (s *RaftStorage) GetCurrentTerm() (uint64, error) {
-	return s.dbGetUint64([]byte(kCurrentTerm))
-}
-
 func (s *RaftStorage) MustGetCurrentTerm() uint64 {
-	term, err := s.GetCurrentTerm()
-	if err != nil {
+	term, err := s.dbGetUint64([]byte(kCurrentTerm))
+	if err == lerrors.ErrNotFound {
+		return 0
+	} else if err != nil {
 		panic(err)
 	}
 	return term
@@ -90,13 +88,11 @@ func (s *RaftStorage) PutCurrentTerm(v uint64) error {
 	return s.dbPutUint64([]byte(kCurrentTerm), v)
 }
 
-func (s *RaftStorage) GetCommitIndex() (uint64, error) {
-	return s.dbGetUint64([]byte(kCommitIndex))
-}
-
 func (s *RaftStorage) MustGetCommitIndex() uint64 {
-	r, err := s.GetCommitIndex()
-	if err != nil {
+	r, err := s.dbGetUint64([]byte(kCommitIndex))
+	if err == lerrors.ErrNotFound {
+		return 0
+	} else if err != nil {
 		panic(err)
 	}
 	return r
@@ -106,21 +102,25 @@ func (s *RaftStorage) PutCommitIndex(v uint64) error {
 	return s.dbPutUint64([]byte(kCommitIndex), v)
 }
 
-func (s *RaftStorage) GetLastApplied() (uint64, error) {
-	return s.dbGetUint64([]byte(kLastApplied))
+func (s *RaftStorage) MustGetLastApplied() uint64 {
+	r, err := s.dbGetUint64([]byte(kLastApplied))
+	if err == lerrors.ErrNotFound {
+		return 0
+	} else if err != nil {
+		panic(err)
+	}
+	return r
 }
 
 func (s *RaftStorage) PutLastApplied(v uint64) error {
 	return s.dbPutUint64([]byte(kLastApplied), v)
 }
 
-func (s *RaftStorage) GetVotedFor() (string, error) {
-	return s.dbGetString([]byte(kVotedFor))
-}
-
 func (s *RaftStorage) MustGetVotedFor() string {
-	v, err := s.GetVotedFor()
-	if err != nil {
+	v, err := s.dbGetString([]byte(kVotedFor))
+	if err == lerrors.ErrNotFound {
+		return ""
+	} else if err != nil {
 		panic(err)
 	}
 	return v
@@ -199,7 +199,7 @@ func (s *RaftStorage) MustTruncateSince(index uint64) {
 	}
 }
 
-func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
+func (s *RaftStorage) getLastLogEntry() (*RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
@@ -216,16 +216,8 @@ func (s *RaftStorage) GetLastLogEntry() (*RaftLogEntry, error) {
 	return &le, nil
 }
 
-func (s *RaftStorage) MustGetLastLogEntry() *RaftLogEntry {
-	le, err := s.GetLastLogEntry()
-	if err != nil {
-		panic(err)
-	}
-	return le
-}
-
 func (s *RaftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
-	le, err := s.GetLastLogEntry()
+	le, err := s.getLastLogEntry()
 	if le == nil && err == nil {
 		return 0, 0
 	}
