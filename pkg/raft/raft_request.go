@@ -25,7 +25,7 @@ func (r *Raft) runElection(grantedC chan bool) error {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	r.storage.PutCurrentTerm(currentTerm + 1)
 	r.storage.PutVotedFor(r.ID)
-	log.Printf("raft.candidate.vote term=%d votedFor=%s", currentTerm, r.ID)
+	log.Printf("[%s] raft.candidate.vote term=%d votedFor=%s", r.ID, currentTerm, r.ID)
 
 	// send requestVote requests asynchronously, collect the vote results into grantedC
 	requests, err := r.buildRequestVoteRequests()

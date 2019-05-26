@@ -1,14 +1,14 @@
 package raft
 
 import (
-	"log"
 	"testing"
+	"time"
 
 	"github.com/facebookgo/clock"
 	"github.com/stretchr/testify/assert"
 )
 
-func makeRaftInstances() (*Raft, *Raft, *Raft) {
+func makeRaftInstances() (*Raft, *Raft, *Raft, *clock.Mock) {
 	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
 	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raft-01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
 	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft-02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
@@ -34,7 +34,7 @@ func makeRaftInstances() (*Raft, *Raft, *Raft) {
 	go raft2.Loop()
 	go raft3.Loop()
 
-	return raft1, raft2, raft3
+	return raft1, raft2, raft3, clock
 }
 
 func Test_NewRaft(t *testing.T) {
@@ -58,7 +58,7 @@ func Test_NewRaft(t *testing.T) {
 }
 
 func Test_RaftRequest(t *testing.T) {
-	raft1, raft2, raft3 := makeRaftInstances()
+	raft1, raft2, raft3, clock := makeRaftInstances()
 	defer func() {
 		raft1.Shutdown()
 		raft2.Shutdown()
@@ -68,5 +68,10 @@ func Test_RaftRequest(t *testing.T) {
 	req := &AppendEntriesRequest{}
 	resp, _ := raft1.requester.SendAppendEntriesRequest(raft1.peers["r2"], req)
 	assert.Equal(t, resp, &AppendEntriesResponse{Term: 0x0, Success: true, Message: "success", LastLogIndex: 0x0})
-	log.Printf("resp: %#v", resp)
+
+	assert.Equal(t, raft1.state, FOLLOWER)
+	assert.Equal(t, raft2.state, FOLLOWER)
+	assert.Equal(t, raft3.state, FOLLOWER)
+
+	clock.Add(6 * time.Second)
 }

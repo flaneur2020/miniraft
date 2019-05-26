@@ -68,7 +68,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		requester: NewRaftRequester(),
 
 		heartbeatInterval: 100 * time.Millisecond,
-		electionTimeout:   20 * time.Second,
+		electionTimeout:   5 * time.Second,
 		clock:             clock.New(),
 
 		reqc:   make(chan interface{}),
@@ -79,7 +79,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 }
 
 func (r *Raft) Loop() {
-	log.Printf("raft.loop.start: id=%s state=%s storage=%s peers=%v", r.ID, r.state, r.storage.path, r.peers)
+	log.Printf("[%s] raft.loop.start: state=%s storage=%s peers=%v", r.ID, r.state, r.storage.path, r.peers)
 	for {
 		switch r.state {
 		case FOLLOWER:
@@ -89,7 +89,7 @@ func (r *Raft) Loop() {
 		case CANDIDATE:
 			r.loopCandidate()
 		case CLOSED:
-			log.Printf("raft.loop.closed id=%s", r.ID)
+			log.Printf("[%s] raft.loop.closed", r.ID)
 			break
 		}
 	}
@@ -100,7 +100,7 @@ func (r *Raft) loopFollower() {
 	for r.state == FOLLOWER {
 		select {
 		case <-electionTimer.C:
-			log.Printf("follower.loop.electionTimeout id=%s", r.ID)
+			log.Printf("[%s] follower.loop.electionTimeout", r.ID)
 			r.setState(CANDIDATE)
 		case <-r.closed:
 			r.closeRaft()
@@ -182,7 +182,7 @@ func (r *Raft) loopLeader() {
 }
 
 func (r *Raft) Shutdown() {
-	log.Printf("raft.shutdown id=%s", r.ID)
+	log.Printf("[%s] raft.shutdown", r.ID)
 	close(r.closed)
 }
 
