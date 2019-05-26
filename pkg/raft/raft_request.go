@@ -30,6 +30,7 @@ func (r *Raft) runElection(grantedC chan bool) error {
 	// send requestVote requests asynchronously, collect the vote results into grantedC
 	requests, err := r.buildRequestVoteRequests()
 	if err != nil {
+		log.Printf("[%s] raft.candidate.vote.buildRequestVoteRequests rr=%s", r.ID, err)
 		return err
 	}
 	peers := map[string]Peer{}

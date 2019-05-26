@@ -1,6 +1,9 @@
 package raft
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+)
 
 func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
 	b := ShowStatusResponse{}
@@ -57,6 +60,7 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 	votedFor := r.storage.MustGetVotedFor()
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 
+	log.Printf("[%s] %s.processRequestVote req=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", r.ID, r.state, req, currentTerm, votedFor, lastLogIndex, lastLogTerm)
 	// if the caller's term smaller than mine, refuse
 	if req.Term < currentTerm {
 		return newRequestVoteResponse(false, currentTerm, "")

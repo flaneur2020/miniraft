@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -9,10 +10,13 @@ import (
 )
 
 func makeRaftInstances() (*Raft, *Raft, *Raft, *clock.Mock) {
+	os.RemoveAll("/tmp/raft-test/")
+	os.MkdirAll("/tmp/raft-test/", 0777)
+
 	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
-	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raft-01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
-	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft-02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
-	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raft-03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
+	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raft-test/r01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
+	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft-test/r02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
+	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raft-test/r03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
 
 	raft1, _ := NewRaft(opt1)
 	raft2, _ := NewRaft(opt2)
@@ -58,6 +62,7 @@ func Test_NewRaft(t *testing.T) {
 }
 
 func Test_RaftRequest(t *testing.T) {
+	// go test github.com/fleurer/miniraft/pkg/raft -run Test_RaftRequest  -v
 	raft1, raft2, raft3, clock := makeRaftInstances()
 	defer func() {
 		raft1.Shutdown()
@@ -73,5 +78,7 @@ func Test_RaftRequest(t *testing.T) {
 	assert.Equal(t, raft2.state, FOLLOWER)
 	assert.Equal(t, raft3.state, FOLLOWER)
 
-	clock.Add(6 * time.Second)
+	clock.Add(7 * time.Second)
+
+	time.Sleep(5)
 }

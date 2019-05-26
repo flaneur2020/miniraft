@@ -194,6 +194,7 @@ func (r *Raft) closeRaft() {
 }
 
 func (r *Raft) setState(s string) {
+	log.Printf("[%s] raft.setState state=%s", r.ID, s)
 	r.state = s
 }
 
