@@ -64,12 +64,12 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 	r.logger.Debugf("raft.process-request-vote req=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", req, currentTerm, votedFor, lastLogIndex, lastLogTerm)
 	// if the caller's term smaller than mine, refuse
 	if req.Term < currentTerm {
-		return newRequestVoteResponse(false, currentTerm, "")
+		return newRequestVoteResponse(false, currentTerm, fmt.Sprintf("req.term: %d < curremtTerm: %d", req.Term, currentTerm))
 	}
 
 	// if the term is equal and we've already voted for another candidate
 	if req.Term == currentTerm && votedFor != "" && votedFor != req.CandidateID {
-		return newRequestVoteResponse(false, currentTerm, "")
+		return newRequestVoteResponse(false, currentTerm, fmt.Sprintf("I've already voted another candidate: %s", votedFor))
 	}
 
 	// if the caller's term bigger than my term: set currentTerm = T, convert to follower
@@ -81,11 +81,11 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 
 	// if the candidate's log is not at least as update as our last log
 	if lastLogIndex > req.LastLogIndex || lastLogTerm > req.LastLogTerm {
-		return newRequestVoteResponse(false, currentTerm, "")
+		return newRequestVoteResponse(false, currentTerm, "candidate's log not at least as update as our last log")
 	}
 
 	r.storage.PutVotedFor(req.CandidateID)
-	return newRequestVoteResponse(true, currentTerm, "")
+	return newRequestVoteResponse(true, currentTerm, "cheers, granted")
 }
 
 func (r *Raft) processCommandRequest(req CommandRequest) CommandResponse {

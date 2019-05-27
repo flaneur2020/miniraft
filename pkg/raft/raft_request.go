@@ -8,8 +8,7 @@ func (r *RaftLeader) broadcastHeartbeats() error {
 	r.logger.Debugf("leader.broadcast-heartbeats requests=%v", requests)
 	for id, request := range requests {
 		p := r.peers[id]
-		resp, err := r.requester.SendAppendEntriesRequest(p, request)
-		r.logger.Debugf("raft.leader.append-entries resp=%-v err=%s", resp, err)
+		_, err := r.requester.SendAppendEntriesRequest(p, request)
 		if err != nil {
 			return err
 		}
@@ -41,16 +40,16 @@ func (r *Raft) runElection(grantedC chan bool) error {
 		for id, req := range requests {
 			p := peers[id]
 			resp, err := r.requester.SendRequestVoteRequest(p, req)
+			r.logger.Debugf("raft.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
 			if err != nil {
-				r.logger.Debugf("raft.candidate.send-request-vote target=%s err=%s", id, err)
 				continue
 			}
 			if resp.VoteGranted {
 				granted++
 			}
 		}
-		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d", granted, len(r.peers))
-		if granted*2 > len(peers) {
+		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d", granted+1, len(r.peers)+1)
+		if (granted+1)*2 > len(peers)+1 {
 			grantedC <- true
 		} else {
 			grantedC <- false
@@ -61,6 +60,7 @@ func (r *Raft) runElection(grantedC chan bool) error {
 
 func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+	currentTerm := r.storage.MustGetCurrentTerm()
 
 	requests := map[string]*RequestVoteRequest{}
 	for id := range r.peers {
@@ -68,6 +68,7 @@ func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error
 		req.CandidateID = r.ID
 		req.LastLogIndex = lastLogIndex
 		req.LastLogTerm = lastLogTerm
+		req.Term = currentTerm
 		requests[id] = &req
 	}
 	return requests, nil
