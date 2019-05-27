@@ -77,7 +77,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 }
 
 func (r *Raft) Loop() {
-	r.logger.Debugf("raft.loop.start: storage=%s peers=%v", r.storage.path, r.peers)
+	r.logger.Infof("raft.loop.start: storage=%s peers=%v", r.storage.path, r.peers)
 	for {
 		switch r.state {
 		case FOLLOWER:
@@ -87,7 +87,7 @@ func (r *Raft) Loop() {
 		case CANDIDATE:
 			r.loopCandidate()
 		case CLOSED:
-			r.logger.Debugf("raft.loop.closed")
+			r.logger.Infof("raft.loop.closed")
 			break
 		}
 	}
@@ -98,7 +98,7 @@ func (r *Raft) loopFollower() {
 	for r.state == FOLLOWER {
 		select {
 		case <-electionTimer.C:
-			r.logger.Debugf("follower.loop.electionTimeout")
+			r.logger.Infof("follower.loop.electionTimeout")
 			r.setState(CANDIDATE)
 		case <-r.closed:
 			r.closeRaft()
@@ -154,14 +154,14 @@ func (r *Raft) loopCandidate() {
 }
 
 func (r *Raft) loopLeader() {
-	nextLogIndexes := map[string]uint64{} // TODO: 初始化为当前最长 log index + 1
+	l := NewRaftLeader(r)
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
 			r.closeRaft()
 		case <-heartbeatTicker.C:
-			r.broadcastHeartbeats(nextLogIndexes)
+			l.broadcastHeartbeats()
 		case ev := <-r.reqc:
 			switch req := ev.(type) {
 			case AppendEntriesRequest:
@@ -185,6 +185,7 @@ func (r *Raft) Shutdown() {
 }
 
 func (r *Raft) closeRaft() {
+	r.logger.Infof("raft.close-raft")
 	r.state = CLOSED
 	r.storage.Close()
 	close(r.reqc)
@@ -192,7 +193,7 @@ func (r *Raft) closeRaft() {
 }
 
 func (r *Raft) setState(s string) {
-	r.logger.Debugf("raft.setState state=%s", s)
+	r.logger.Debugf("raft.set-state state=%s", s)
 	r.state = s
 }
 

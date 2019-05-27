@@ -26,7 +26,7 @@ func (rr *raftRequester) SendAppendEntriesRequest(p Peer, request *AppendEntries
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesResponse{}
 	err := rr.post(p, url, request, &resp)
-	rr.logger.Debugf("raft.request.send-append-entries to=%s req=%#v err=%s", p.ID, request, err)
+	// rr.logger.Debugf("raft.request.send-append-entries to=%s req=%#v err=%s", p.ID, request, err)
 	if err != nil {
 		return nil, err
 	}

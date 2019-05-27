@@ -1,17 +1,18 @@
 package raft
 
-func (r *Raft) broadcastHeartbeats(nextLogIndexes map[string]uint64) error {
-	requests, err := r.buildAppendEntriesRequests(nextLogIndexes)
+func (r *RaftLeader) broadcastHeartbeats() error {
+	requests, err := r.buildAppendEntriesRequests(r.nextLogIndexes)
 	if err != nil {
 		return err
 	}
+	r.logger.Debugf("leader.broadcast-heartbeats requests=%v", requests)
 	for id, request := range requests {
 		p := r.peers[id]
 		resp, err := r.requester.SendAppendEntriesRequest(p, request)
+		r.logger.Debugf("raft.leader.append-entries resp=%-v err=%s", resp, err)
 		if err != nil {
 			return err
 		}
-		r.logger.Debugf("raft.leader.append-entries resp=%-v", resp)
 	}
 	return nil
 }

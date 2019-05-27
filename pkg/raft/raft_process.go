@@ -17,6 +17,8 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 	currentTerm := r.storage.MustGetCurrentTerm()
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
+	// r.logger.Debugf("raft.process-append-entries req=%#v currentTerm=%d lastLogIndex=%d", req, currentTerm, lastLogIndex)
+
 	if req.Term < currentTerm {
 		return newAppendEntriesResponse(false, currentTerm, lastLogIndex, "req.Term < currentTerm")
 	}

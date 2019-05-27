@@ -1,3 +1,5 @@
+make
+
 rm -rf /tmp/raft-debug/*
 
 tmux \
