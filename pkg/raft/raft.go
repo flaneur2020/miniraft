@@ -31,6 +31,8 @@ type raft struct {
 	state string
 	peers map[string]Peer
 
+	nextLogIndexes map[string]uint64
+
 	heartbeatInterval time.Duration
 	electionTimeout   time.Duration
 	clock             clock.Clock
@@ -82,6 +84,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	r.electionTimeout = 5 * time.Second
 	r.peers = peers
 	r.storage = storage
+	r.nextLogIndexes = map[string]uint64{}
 	r.clock = clock.New()
 	r.logger = NewRaftLogger(r.ID, DEBUG)
 	r.requester = NewRaftRequester(r.logger)
@@ -180,14 +183,14 @@ func (r *raft) loopCandidate() {
 }
 
 func (r *raft) loopLeader() {
-	l := NewRaftLeader(r)
+	r.resetLeader()
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
 			r.closeRaft()
 		case <-heartbeatTicker.C:
-			l.broadcastHeartbeats()
+			r.broadcastHeartbeats()
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
 			case AppendEntriesRequest:
@@ -202,6 +205,13 @@ func (r *raft) loopLeader() {
 				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
 			}
 		}
+	}
+}
+
+func (r *raft) resetLeader() {
+	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
+	for _, p := range r.peers {
+		r.nextLogIndexes[p.ID] = lastLogIndex
 	}
 }
 

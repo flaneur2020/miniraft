@@ -1,6 +1,6 @@
 package raft
 
-func (r *raftLeader) broadcastHeartbeats() error {
+func (r *raft) broadcastHeartbeats() error {
 	requests, err := r.buildAppendEntriesRequests(r.nextLogIndexes)
 	if err != nil {
 		return err
