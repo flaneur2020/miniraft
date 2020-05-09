@@ -22,9 +22,9 @@ type Peer struct {
 type Raft interface {
 	Tick(n uint64) error
 	Loop()
-	ProcessRequestVote(req *RequestVoteRequest) (*RequestVoteResponse, error)
-	ProcessAppendEntries(req *AppendEntriesRequest) (*AppendEntriesResponse, error)
-	ProcessCommand(req *CommandRequest) (*CommandResponse, error)
+	ProcessRequestVote(req *RequestVoteRequest) (interface{}, error)
+	ProcessAppendEntries(req *AppendEntriesRequest) (interface{}, error)
+	ProcessCommand(req *CommandRequest) (interface{}, error)
 	Shutdown()
 }
 
@@ -89,22 +89,22 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	return r, nil
 }
 
-func (r *raft) ProcessAppendEntries(req *AppendEntriesRequest) (*AppendEntriesResponse, error) {
+func (r *raft) ProcessAppendEntries(req *AppendEntriesRequest) (interface{}, error) {
 	r.reqc <- req
 	resp := <-r.respc
-	return resp.(*AppendEntriesResponse), nil
+	return resp, nil
 }
 
-func (r *raft) ProcessCommand(req *CommandRequest) (*CommandResponse, error) {
+func (r *raft) ProcessCommand(req *CommandRequest) (interface{}, error) {
 	r.reqc <- req
 	resp := <-r.respc
-	return resp.(*CommandResponse), nil
+	return resp, nil
 }
 
-func (r *raft) ProcessRequestVote(req *RequestVoteRequest) (*RequestVoteResponse, error) {
+func (r *raft) ProcessRequestVote(req *RequestVoteRequest) (interface{}, error) {
 	r.reqc <- req
 	resp := <-r.respc
-	return resp.(*RequestVoteResponse), nil
+	return resp, nil
 }
 
 func (r *raft) Tick(n uint64) error {
