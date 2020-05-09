@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/Fleurer/miniraft/pkg/server"
 	"net/http"
 	"os"
 	"os/signal"
@@ -32,7 +33,7 @@ func run(path string) {
 		panic(fmt.Sprintf("load raft option failed: %s", err))
 	}
 
-	rs, err := raft.NewRaftServer(opt)
+	rs, err := server.NewRaftServer(opt)
 	if err != nil {
 		panic(fmt.Sprintf("new raft server failed: %s", err))
 	}

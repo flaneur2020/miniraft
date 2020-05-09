@@ -1,24 +1,25 @@
-package raft
+package server
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/Fleurer/miniraft/pkg/raft"
 	"io/ioutil"
 	"net/http"
 )
 
 type RaftServer struct {
-	raft       Raft
+	r          raft.Raft
 	listenAddr string
 	httpServer *http.Server
 }
 
-func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
-	r, err := NewRaft(opt)
+func NewRaftServer(opt *raft.RaftOptions) (*RaftServer, error) {
+	r, err := raft.NewRaft(opt)
 	if err != nil {
 		return nil, err
 	}
-	s := &RaftServer{raft: r, listenAddr: opt.ListenAddr}
+	s := &RaftServer{r: r, listenAddr: opt.ListenAddr}
 	m := http.NewServeMux()
 	m.HandleFunc("/health", s.handleHealth)
 	m.HandleFunc("/_raft/append-entries", s.handleAppendEntries)
@@ -30,67 +31,67 @@ func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
 }
 
 func (s *RaftServer) ListenAndServe() error {
-	go s.raft.Loop()
+	go s.r.Loop()
 	return s.httpServer.ListenAndServe()
 }
 
 func (s *RaftServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	s.response(w, ServerReply{Code: SUCCESS, Message: "health"})
+	s.response(w, raft.ServerReply{Code: raft.SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleStatus(w http.ResponseWriter, r *http.Request) {
-	s.response(w, ServerReply{Code: SUCCESS, Message: "health"})
+	s.response(w, raft.ServerReply{Code: raft.SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request) {
-	req := AppendEntriesMessage{}
-	err := s.parseRequest(r, &req)
+	msg := raft.AppendEntriesMessage{}
+	err := s.parseRequest(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
 	}
 
-	resp, err := s.raft.Process(&req)
+	reply, err := s.r.Process(&msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
 	}
 
-	s.response(w, resp)
+	s.response(w, reply)
 }
 
 func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
-	req := RequestVoteMessage{}
-	err := s.parseRequest(r, &req)
+	msg := raft.RequestVoteMessage{}
+	err := s.parseRequest(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
 	}
 
-	resp, err := s.raft.Process(&req)
+	reply, err := s.r.Process(&msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
 	}
 
-	s.response(w, resp)
+	s.response(w, reply)
 }
 
 func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
-	req := CommandMessage{}
-	err := s.parseRequest(r, &req)
+	msg := raft.CommandMessage{}
+	err := s.parseRequest(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
 	}
 
-	resp, err := s.raft.Process(&req)
+	reply, err := s.r.Process(&msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
 	}
 
-	s.response(w, resp)
+	s.response(w, reply)
 }
 
 func (s *RaftServer) parseRequest(r *http.Request, target interface{}) error {
@@ -125,7 +126,7 @@ func (s *RaftServer) responseError(w http.ResponseWriter, code int, message stri
 }
 
 func (s *RaftServer) Shutdown() error {
-	s.raft.Shutdown()
+	s.r.Shutdown()
 	ctx := context.TODO()
 	return s.httpServer.Shutdown(ctx)
 }
