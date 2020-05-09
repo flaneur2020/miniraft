@@ -1,5 +1,7 @@
 package raft
 
+import "github.com/Fleurer/miniraft/pkg/storage"
+
 const (
 	SUCCESS        = 200
 	NOT_FOUND      = 404
@@ -21,7 +23,7 @@ type AppendEntriesRequest struct {
 	PrevLogIndex uint64 `json:"prevLogIndex"`
 	PrevLogTerm  uint64 `json:"prevLogTerm"`
 
-	LogEntries []RaftLogEntry `json:"logEntries,omitempty"`
+	LogEntries []storage.RaftLogEntry `json:"logEntries,omitempty"`
 }
 
 type AppendEntriesResponse struct {
@@ -48,10 +50,10 @@ type ShowStatusRequest struct {
 }
 
 type ShowStatusResponse struct {
-	Term        uint64          `json:"term"`
-	CommitIndex uint64          `json:"commitIndex"`
-	Peers       map[string]Peer `json:"peers"`
-	State       string          `json:"state"`
+	Term        uint64               `json:"term"`
+	CommitIndex uint64               `json:"commitIndex"`
+	Peers       map[string]Peer      `json:"peers"`
+	State       string               `json:"state"`
 }
 
 type ServerResponse struct {
@@ -60,24 +62,12 @@ type ServerResponse struct {
 }
 
 type CommandRequest struct {
-	Command RaftCommand `json:"command"`
+	Command storage.RaftCommand `json:"command"`
 }
 
 type CommandResponse struct {
 	Message string `json:"message"`
 	Value   []byte `json:"value,omitempty"`
-}
-
-type RaftCommand struct {
-	OpType string `json:"opType"`
-	Key    []byte `json:"key"`
-	Value  []byte `json:"value,omitempty"`
-}
-
-type RaftLogEntry struct {
-	Term    uint64      `json:"term"`
-	Index   uint64      `json:"index"`
-	Command RaftCommand `json:"command"`
 }
 
 func newRequestVoteResponse(success bool, term uint64, message string) RequestVoteResponse {

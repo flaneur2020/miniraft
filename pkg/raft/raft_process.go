@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"github.com/Fleurer/miniraft/pkg/storage"
 )
 
 func (r *raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
@@ -46,7 +47,7 @@ func (r *raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 	}
 
 	if req.PrevLogIndex < lastLogIndex {
-		r.storage.MustTruncateSince(req.PrevLogIndex + 1)
+		r.storage.TruncateSince(req.PrevLogIndex + 1)
 	}
 
 	r.storage.AppendLogEntries(req.LogEntries)
@@ -93,7 +94,7 @@ func (r *raft) processCommandRequest(req CommandRequest) CommandResponse {
 	case kNop:
 		return CommandResponse{Value: []byte{}, Message: "nop"}
 	case kPut:
-		logIndex, _ := r.storage.AppendLogEntriesByCommands([]RaftCommand{req.Command})
+		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command})
 		// TODO: await logIndex got commit
 		return CommandResponse{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 	case kGet:

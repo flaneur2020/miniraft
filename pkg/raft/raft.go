@@ -2,7 +2,7 @@ package raft
 
 import (
 	"fmt"
-	"github.com/Fleurer/miniraft/pkg/raft/storage"
+	"github.com/Fleurer/miniraft/pkg/storage"
 	"time"
 
 	"github.com/facebookgo/clock"
@@ -16,8 +16,8 @@ const (
 )
 
 type Peer struct {
-	ID   string
-	Addr string
+	ID   string `json:"id"`
+	Addr string `json:"addr"`
 }
 
 type Raft interface {
@@ -138,15 +138,15 @@ func (r *raft) loopFollower() {
 			r.closeRaft()
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
-			case AppendEntriesRequest:
+			case data.AppendEntriesRequest:
 				ev.respc <- r.processAppendEntriesRequest(req)
 				electionTimer = r.newElectionTimer()
-			case RequestVoteRequest:
+			case data.RequestVoteRequest:
 				ev.respc <- r.processRequestVoteRequest(req)
-			case ShowStatusRequest:
+			case data.ShowStatusRequest:
 				ev.respc <- r.processShowStatusRequest(req)
 			default:
-				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for follower: %v", req))
+				ev.respc <- data.newServerResponse(400, fmt.Sprintf("invalid request for follower: %v", req))
 			}
 		}
 	}
@@ -182,12 +182,12 @@ func (r *raft) loopCandidate() {
 
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
-			case RequestVoteRequest:
+			case data.RequestVoteRequest:
 				ev.respc <- r.processRequestVoteRequest(req)
-			case ShowStatusRequest:
+			case data.ShowStatusRequest:
 				ev.respc <- r.processShowStatusRequest(req)
 			default:
-				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for candidate: %v", req))
+				ev.respc <- data.newServerResponse(400, fmt.Sprintf("invalid request for candidate: %v", req))
 			}
 		}
 	}
@@ -204,16 +204,16 @@ func (r *raft) loopLeader() {
 			r.broadcastHeartbeats()
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
-			case AppendEntriesRequest:
+			case data.AppendEntriesRequest:
 				ev.respc <- r.processAppendEntriesRequest(req)
-			case RequestVoteRequest:
+			case data.RequestVoteRequest:
 				ev.respc <- r.processRequestVoteRequest(req)
-			case ShowStatusRequest:
+			case data.ShowStatusRequest:
 				ev.respc <- r.processShowStatusRequest(req)
-			case CommandRequest:
+			case data.CommandRequest:
 				ev.respc <- r.processCommandRequest(req)
 			default:
-				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
+				ev.respc <- data.newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
 			}
 		}
 	}

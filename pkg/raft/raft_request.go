@@ -1,5 +1,7 @@
 package raft
 
+import "github.com/Fleurer/miniraft/pkg/data"
+
 func (r *raft) broadcastHeartbeats() error {
 	requests, err := r.buildAppendEntriesRequests(r.nextLogIndexes)
 	if err != nil {
@@ -61,13 +63,13 @@ func (r *raft) runElection() bool {
 	return success
 }
 
-func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
+func (r *raft) buildRequestVoteRequests() (map[string]*data.RequestVoteRequest, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	currentTerm := r.storage.MustGetCurrentTerm()
 
-	requests := map[string]*RequestVoteRequest{}
+	requests := map[string]*data.RequestVoteRequest{}
 	for id := range r.peers {
-		req := RequestVoteRequest{}
+		req := data.RequestVoteRequest{}
 		req.CandidateID = r.ID
 		req.LastLogIndex = lastLogIndex
 		req.LastLogTerm = lastLogTerm
@@ -77,12 +79,12 @@ func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error
 	return requests, nil
 }
 
-func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
-	requests := map[string]*AppendEntriesRequest{}
+func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*data.AppendEntriesRequest, error) {
+	requests := map[string]*data.AppendEntriesRequest{}
 	for id, idx := range nextLogIndexes {
-		request := &AppendEntriesRequest{}
+		request := &data.AppendEntriesRequest{}
 		request.LeaderID = r.ID
-		request.LogEntries = []RaftLogEntry{}
+		request.LogEntries = []data.RaftLogEntry{}
 		request.Term = r.storage.MustGetCurrentTerm()
 		request.CommitIndex = r.storage.MustGetCommitIndex()
 

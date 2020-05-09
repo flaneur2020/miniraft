@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/Fleurer/miniraft/pkg/raft"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	lerrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -19,9 +18,21 @@ const (
 	kLogEntries  = "l:log-entries"
 )
 
+type RaftLogEntry struct {
+	Term    uint64      `json:"term"`
+	Index   uint64      `json:"index"`
+	Command RaftCommand `json:"command"`
+}
+
+type RaftCommand struct {
+	OpType string `json:"opType"`
+	Key    []byte `json:"key"`
+	Value  []byte `json:"value,omitempty"`
+}
+
 type RaftStorage interface {
 	MustGetKV([]byte) ([]byte, bool)
-	MustPutKV([]byte, []byte) []byte
+	MustPutKV([]byte, []byte)
 	MustDeleteKV([]byte)
 
 	MustGetCurrentTerm() uint64
@@ -29,13 +40,14 @@ type RaftStorage interface {
 	MustGetLastApplied() uint64
 	MustGetVotedFor() string
 	MustGetLastLogIndexAndTerm() (uint64, uint64)
-	MustGetLogEntriesSince(index uint64) []raft.RaftLogEntry
+	MustGetLogEntriesSince(index uint64) []RaftLogEntry
 
 	PutCurrentTerm(uint64) error
 	PutLastApplied(uint64) error
 	PutCommitIndex(uint64) error
 	PutVotedFor(string) error
-	AppendLogEntries(entries []raft.RaftLogEntry) error
+	AppendLogEntries(entries []RaftLogEntry) error
+	AppendLogEntriesByCommands(commands []RaftCommand) (uint64, error)
 	TruncateSince(index uint64)
 
 	Reset()
@@ -92,7 +104,7 @@ func (s *raftStorage) MustGetKV(key []byte) ([]byte, bool) {
 	return buf, true
 }
 
-func (s *raftStorage) MustDeleteKV(key []byte, value []byte) {
+func (s *raftStorage) MustDeleteKV(key []byte) {
 	k := []byte(fmt.Sprintf("d:%s", key))
 	err := s.db.Delete(k, nil)
 	if err != lerrors.ErrNotFound {
@@ -156,7 +168,7 @@ func (s *raftStorage) PutVotedFor(v string) error {
 	return s.dbPutString([]byte(kVotedFor), v)
 }
 
-func (s *raftStorage) AppendLogEntries(entries []raft.RaftLogEntry) error {
+func (s *raftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	batch := new(leveldb.Batch)
 	for _, le := range entries {
 		k := makeLogEntryKey(le.Index)
@@ -170,12 +182,12 @@ func (s *raftStorage) AppendLogEntries(entries []raft.RaftLogEntry) error {
 	return nil
 }
 
-func (s *raftStorage) AppendLogEntriesByCommands(commands []raft.RaftCommand) (uint64, error) {
+func (s *raftStorage) AppendLogEntriesByCommands(commands []RaftCommand) (uint64, error) {
 	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
 	term := s.MustGetCurrentTerm()
-	es := []raft.RaftLogEntry{}
+	es := []RaftLogEntry{}
 	for _, cmd := range commands {
-		le := raft.RaftLogEntry{
+		le := RaftLogEntry{
 			Index:   lastIndex + 1,
 			Term:    term,
 			Command: cmd,
@@ -187,15 +199,15 @@ func (s *raftStorage) AppendLogEntriesByCommands(commands []raft.RaftCommand) (u
 	return lastIndex, err
 }
 
-func (s *raftStorage) GetLogEntriesSince(index uint64) ([]raft.RaftLogEntry, error) {
+func (s *raftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	rg.Start = makeLogEntryKey(index)
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
-	es := []raft.RaftLogEntry{}
+	es := []RaftLogEntry{}
 	for iter.Next() {
 		buf := iter.Value()
-		le := raft.RaftLogEntry{}
+		le := RaftLogEntry{}
 		err := json.Unmarshal(buf, &le)
 		if err != nil {
 			return nil, err
@@ -205,7 +217,7 @@ func (s *raftStorage) GetLogEntriesSince(index uint64) ([]raft.RaftLogEntry, err
 	return es, nil
 }
 
-func (s *raftStorage) MustGetLogEntriesSince(index uint64) []raft.RaftLogEntry {
+func (s *raftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
 	es, err := s.GetLogEntriesSince(index)
 	if err != nil {
 		panic(err)
@@ -225,7 +237,7 @@ func (s *raftStorage) TruncateSince(index uint64) {
 	}
 }
 
-func (s *raftStorage) getLastLogEntry() (*raft.RaftLogEntry, error) {
+func (s *raftStorage) getLastLogEntry() (*RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
@@ -234,7 +246,7 @@ func (s *raftStorage) getLastLogEntry() (*raft.RaftLogEntry, error) {
 		return nil, nil
 	}
 	buf := iter.Value()
-	le := raft.RaftLogEntry{}
+	le := RaftLogEntry{}
 	err := json.Unmarshal(buf, &le)
 	if err != nil {
 		return nil, err
