@@ -71,7 +71,7 @@ func (rr *raftRequester) post(p Peer, url string, request interface{}, response 
 }
 
 type mockRaftRequester struct {
-	rafts map[string]*Raft
+	rafts map[string]*raft
 }
 
 func (r *mockRaftRequester) SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error) {

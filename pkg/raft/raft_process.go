@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
+func (r *raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusResponse {
 	b := ShowStatusResponse{}
 	b.Term = r.storage.MustGetCurrentTerm()
 	b.CommitIndex = r.storage.MustGetCommitIndex()
@@ -13,7 +13,7 @@ func (r *Raft) processShowStatusRequest(req ShowStatusRequest) ShowStatusRespons
 	return b
 }
 
-func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
+func (r *raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntriesResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
@@ -56,7 +56,7 @@ func (r *Raft) processAppendEntriesRequest(req AppendEntriesRequest) AppendEntri
 	return newAppendEntriesResponse(true, currentTerm, lastLogIndex, "success")
 }
 
-func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
+func (r *raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResponse {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	votedFor := r.storage.MustGetVotedFor()
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
@@ -88,7 +88,7 @@ func (r *Raft) processRequestVoteRequest(req RequestVoteRequest) RequestVoteResp
 	return newRequestVoteResponse(true, currentTerm, "cheers, granted")
 }
 
-func (r *Raft) processCommandRequest(req CommandRequest) CommandResponse {
+func (r *raft) processCommandRequest(req CommandRequest) CommandResponse {
 	switch req.Command.OpType {
 	case kNop:
 		return CommandResponse{Value: []byte{}, Message: "nop"}

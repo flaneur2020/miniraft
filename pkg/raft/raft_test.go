@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makeRaftInstances() (*Raft, *Raft, *Raft, *clock.Mock) {
+func makeRaftInstances() (*raft, *raft, *raft, *clock.Mock) {
 	os.RemoveAll("/tmp/raft-test/")
 	os.MkdirAll("/tmp/raft-test/", 0777)
 
@@ -22,7 +22,7 @@ func makeRaftInstances() (*Raft, *Raft, *Raft, *clock.Mock) {
 	raft2, _ := NewRaft(opt2)
 	raft3, _ := NewRaft(opt3)
 
-	requester := &mockRaftRequester{map[string]*Raft{"r1": raft1, "r2": raft2, "r3": raft3}}
+	requester := &mockRaftRequester{map[string]*raft{"r1": raft1, "r2": raft2, "r3": raft3}}
 	clock := clock.NewMock()
 
 	raft1.requester = requester

@@ -19,7 +19,7 @@ type Peer struct {
 	Addr string
 }
 
-type Raft struct {
+type raft struct {
 	ID    string
 	state string
 	peers map[string]Peer
@@ -45,7 +45,7 @@ type RaftOptions struct {
 	InitialPeers map[string]string `json:"initialPeers"`
 }
 
-func NewRaft(opt *RaftOptions) (*Raft, error) {
+func NewRaft(opt *RaftOptions) (*raft, error) {
 	peers := map[string]Peer{}
 	for id, addr := range opt.InitialPeers {
 		if id == opt.ID {
@@ -60,7 +60,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 		return nil, err
 	}
 
-	r := &Raft{}
+	r := &raft{}
 	r.ID = opt.ID
 	r.state = FOLLOWER
 	r.heartbeatInterval = 100 * time.Millisecond
@@ -76,7 +76,7 @@ func NewRaft(opt *RaftOptions) (*Raft, error) {
 	return r, nil
 }
 
-func (r *Raft) Loop() {
+func (r *raft) Loop() {
 	r.logger.Infof("raft.loop.start: storage=%s peers=%v", r.storage.path, r.peers)
 	for {
 		switch r.state {
@@ -93,7 +93,7 @@ func (r *Raft) Loop() {
 	}
 }
 
-func (r *Raft) loopFollower() {
+func (r *raft) loopFollower() {
 	electionTimer := r.newElectionTimer()
 	for r.state == FOLLOWER {
 		select {
@@ -122,7 +122,7 @@ func (r *Raft) loopFollower() {
 // 它自己赢得选举；
 // 另一台机器宣称自己赢得选举；
 // 一段时间过后没有赢家
-func (r *Raft) loopCandidate() {
+func (r *raft) loopCandidate() {
 	grantedC := make(chan bool)
 	electionTimer := r.newElectionTimer()
 	r.runElection(grantedC)
@@ -153,7 +153,7 @@ func (r *Raft) loopCandidate() {
 	}
 }
 
-func (r *Raft) loopLeader() {
+func (r *raft) loopLeader() {
 	l := NewRaftLeader(r)
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
 	for r.state == LEADER {
@@ -179,12 +179,12 @@ func (r *Raft) loopLeader() {
 	}
 }
 
-func (r *Raft) Shutdown() {
+func (r *raft) Shutdown() {
 	r.logger.Debugf("raft.shutdown")
 	close(r.closed)
 }
 
-func (r *Raft) closeRaft() {
+func (r *raft) closeRaft() {
 	r.logger.Infof("raft.close-raft")
 	r.state = CLOSED
 	r.storage.Close()
@@ -192,11 +192,11 @@ func (r *Raft) closeRaft() {
 	close(r.respc)
 }
 
-func (r *Raft) setState(s string) {
+func (r *raft) setState(s string) {
 	r.logger.Debugf("raft.set-state state=%s", s)
 	r.state = s
 }
 
-func (r *Raft) newElectionTimer() *clock.Timer {
+func (r *raft) newElectionTimer() *clock.Timer {
 	return NewTimerBetween(r.clock, r.electionTimeout, r.electionTimeout*2)
 }

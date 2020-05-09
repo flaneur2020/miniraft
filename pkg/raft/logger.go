@@ -6,7 +6,7 @@ import (
 )
 
 type RaftLogger struct {
-	raft  *Raft
+	raft  *raft
 	level int
 }
 
@@ -17,7 +17,7 @@ var (
 	DEBUG = 4
 )
 
-func NewRaftLogger(raft *Raft, level int) *RaftLogger {
+func NewRaftLogger(raft *raft, level int) *RaftLogger {
 	return &RaftLogger{raft: raft, level: level}
 }
 

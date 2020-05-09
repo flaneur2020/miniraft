@@ -17,7 +17,7 @@ func (r *RaftLeader) broadcastHeartbeats() error {
 }
 
 // requestVote broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *Raft) runElection(grantedC chan bool) error {
+func (r *raft) runElection(grantedC chan bool) error {
 	_assert((r.state == CANDIDATE), "should be candidate")
 	// increase candidate's term and vote for itself
 	currentTerm := r.storage.MustGetCurrentTerm()
@@ -58,7 +58,7 @@ func (r *Raft) runElection(grantedC chan bool) error {
 	return nil
 }
 
-func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
+func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	currentTerm := r.storage.MustGetCurrentTerm()
 
@@ -74,7 +74,7 @@ func (r *Raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error
 	return requests, nil
 }
 
-func (r *Raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
+func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
 	requests := map[string]*AppendEntriesRequest{}
 	for id, idx := range nextLogIndexes {
 		request := &AppendEntriesRequest{}

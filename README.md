@@ -2,6 +2,7 @@ a copycat implementation to learn raft
 
 todo
 
+- [ ] Loop to step
 - [ ] 异步响应 append log
 - [ ] commit command
 

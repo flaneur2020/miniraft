@@ -8,7 +8,7 @@ import (
 )
 
 type RaftServer struct {
-	raft       *Raft
+	raft       *raft
 	listenAddr string
 	httpServer *http.Server
 }

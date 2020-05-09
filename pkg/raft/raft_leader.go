@@ -2,11 +2,11 @@ package raft
 
 type RaftLeader struct {
 	nextLogIndexes map[string]uint64
-	*Raft
+	*raft
 }
 
-func NewRaftLeader(raft *Raft) *RaftLeader {
-	l := &RaftLeader{nextLogIndexes: map[string]uint64{}, Raft: raft}
+func NewRaftLeader(raft *raft) *RaftLeader {
+	l := &RaftLeader{nextLogIndexes: map[string]uint64{}, raft: raft}
 
 	lastLogIndex, _ := l.storage.MustGetLastLogIndexAndTerm()
 	for _, p := range l.peers {
