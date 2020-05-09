@@ -36,16 +36,16 @@ func (s *RaftServer) ListenAndServe() error {
 }
 
 func (s *RaftServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	s.response(w, raft.ServerReply{Code: raft.SUCCESS, Message: "health"})
+	s.response(w, raft.MessageReply{Code: raft.SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleStatus(w http.ResponseWriter, r *http.Request) {
-	s.response(w, raft.ServerReply{Code: raft.SUCCESS, Message: "health"})
+	s.response(w, raft.MessageReply{Code: raft.SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request) {
 	msg := raft.AppendEntriesMessage{}
-	err := s.parseRequest(r, &msg)
+	err := s.parseMessage(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -62,7 +62,7 @@ func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request)
 
 func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 	msg := raft.RequestVoteMessage{}
-	err := s.parseRequest(r, &msg)
+	err := s.parseMessage(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -79,7 +79,7 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 
 func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
 	msg := raft.CommandMessage{}
-	err := s.parseRequest(r, &msg)
+	err := s.parseMessage(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -94,7 +94,7 @@ func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
 	s.response(w, reply)
 }
 
-func (s *RaftServer) parseRequest(r *http.Request, target interface{}) error {
+func (s *RaftServer) parseMessage(r *http.Request, target interface{}) error {
 	buf, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return err

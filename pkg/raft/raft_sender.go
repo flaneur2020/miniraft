@@ -80,7 +80,7 @@ func (r *mockRaftRequester) SendRequestVote(p Peer, req *RequestVoteMessage) (*R
 	ev := newRaftEV(req)
 	raft.eventc <- ev
 	resp := <-ev.replyc
-	if r, ok := resp.(*ServerReply); ok {
+	if r, ok := resp.(*MessageReply); ok {
 		return nil, fmt.Errorf("bad result: %s", r.Message)
 	} else if r, ok := resp.(*RequestVoteReply); ok {
 		return r, nil
@@ -94,7 +94,7 @@ func (r *mockRaftRequester) SendAppendEntries(p Peer, req *AppendEntriesMessage)
 	ev := newRaftEV(req)
 	raft.eventc <- ev
 	resp := <-ev.replyc
-	if r, ok := resp.(*ServerReply); ok {
+	if r, ok := resp.(*MessageReply); ok {
 		return nil, fmt.Errorf("bad result: %s", r.Message)
 	} else if r, ok := resp.(*AppendEntriesReply); ok {
 		return r, nil

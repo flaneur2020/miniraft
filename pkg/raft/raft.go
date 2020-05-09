@@ -22,9 +22,8 @@ type Peer struct {
 }
 
 type Raft interface {
-	Tick(n uint64) error
 	Loop()
-	Process(msg interface{}) (interface{}, error)
+	Process(msg RaftMessage) (interface{}, error)
 	Shutdown()
 }
 
@@ -56,12 +55,12 @@ type RaftOptions struct {
 }
 
 type raftEV struct {
-	msg    interface{}
-	replyc chan interface{}
+	msg    RaftMessage
+	replyc chan RaftReply
 }
 
-func newRaftEV(msg interface{}) raftEV {
-	return raftEV{msg, make(chan interface{}, 1)}
+func newRaftEV(msg RaftMessage) raftEV {
+	return raftEV{msg, make(chan RaftReply, 1)}
 }
 
 func NewRaft(opt *RaftOptions) (Raft, error) {
@@ -99,16 +98,12 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	return r, nil
 }
 
-func (r *raft) Process(msg interface{}) (interface{}, error) {
+func (r *raft) Process(msg RaftMessage) (interface{}, error) {
 	ev := newRaftEV(msg)
 	r.eventc <- ev
 	reply := <-ev.replyc
 	close(ev.replyc)
 	return reply, nil
-}
-
-func (r *raft) Tick(n uint64) error {
-	return nil
 }
 
 func (r *raft) Loop() {
@@ -147,7 +142,7 @@ func (r *raft) loopFollower() {
 			case *ShowStatusMessage:
 				ev.replyc <- r.processShowStatus(msg)
 			default:
-				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
+				ev.replyc <- newMessageReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
 			}
 		}
 	}
@@ -188,7 +183,7 @@ func (r *raft) loopCandidate() {
 			case *ShowStatusMessage:
 				ev.replyc <- r.processShowStatus(msg)
 			default:
-				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
+				ev.replyc <- newMessageReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
 			}
 		}
 	}
@@ -214,7 +209,7 @@ func (r *raft) loopLeader() {
 			case *CommandMessage:
 				ev.replyc <- r.processCommand(msg)
 			default:
-				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
+				ev.replyc <- newMessageReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
 			}
 		}
 	}
