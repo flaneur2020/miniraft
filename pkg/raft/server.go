@@ -50,7 +50,7 @@ func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	resp, err := s.raft.ProcessAppendEntries(&req)
+	resp, err := s.raft.Process(&req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -67,7 +67,7 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.raft.ProcessRequestVote(&req)
+	resp, err := s.raft.Process(&req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -84,7 +84,7 @@ func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := s.raft.ProcessCommand(&req)
+	resp, err := s.raft.Process(&req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return

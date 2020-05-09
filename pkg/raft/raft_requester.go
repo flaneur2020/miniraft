@@ -49,25 +49,25 @@ func (rr *raftRequester) post(p Peer, url string, request interface{}, response 
 	if err != nil {
 		return err
 	}
+
 	req, err := http.NewRequest("POST", url, bytes.NewReader(buf))
 	if err != nil {
 		return err
 	}
+
 	c := http.Client{Timeout: time.Duration(100 * time.Millisecond)}
 	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(body, response)
-	if err != nil {
-		return err
-	}
-	return nil
+
+	return json.Unmarshal(body, response)
 }
 
 type mockRaftRequester struct {
@@ -76,14 +76,14 @@ type mockRaftRequester struct {
 
 func (r *mockRaftRequester) SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error) {
 	raft := r.rafts[p.ID]
-	raft.reqc <- *req
+	raft.eventc <- *req
 	resp := (<-raft.respc).(RequestVoteResponse)
 	return &resp, nil
 }
 
 func (r *mockRaftRequester) SendAppendEntriesRequest(p Peer, req *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	raft := r.rafts[p.ID]
-	raft.reqc <- *req
+	raft.eventc <- *req
 	resp := (<-raft.respc).(AppendEntriesResponse)
 	return &resp, nil
 }

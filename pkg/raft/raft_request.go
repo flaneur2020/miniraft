@@ -1,10 +1,11 @@
 package raft
 
-func (r *RaftLeader) broadcastHeartbeats() error {
+func (r *raftLeader) broadcastHeartbeats() error {
 	requests, err := r.buildAppendEntriesRequests(r.nextLogIndexes)
 	if err != nil {
 		return err
 	}
+
 	r.logger.Debugf("leader.broadcast-heartbeats requests=%v", requests)
 	for id, request := range requests {
 		p := r.peers[id]

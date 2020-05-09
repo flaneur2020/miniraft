@@ -22,9 +22,7 @@ type Peer struct {
 type Raft interface {
 	Tick(n uint64) error
 	Loop()
-	ProcessRequestVote(req *RequestVoteRequest) (interface{}, error)
-	ProcessAppendEntries(req *AppendEntriesRequest) (interface{}, error)
-	ProcessCommand(req *CommandRequest) (interface{}, error)
+	Process(req interface{}) (interface{}, error)
 	Shutdown()
 }
 
@@ -41,8 +39,7 @@ type raft struct {
 	storage   *RaftStorage
 	requester RaftRequester
 
-	reqc   chan interface{}
-	respc  chan interface{}
+	eventc chan raftEv
 	closed chan struct{}
 }
 
@@ -52,6 +49,11 @@ type RaftOptions struct {
 	ListenAddr   string            `json:"listenAddr"`
 	PeerAddr     string            `json:"peerAddr"`
 	InitialPeers map[string]string `json:"initialPeers"`
+}
+
+type raftEv struct {
+	req interface{}
+	respc chan interface{}
 }
 
 func NewRaft(opt *RaftOptions) (Raft, error) {
@@ -81,29 +83,18 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	r.peers = peers
 	r.storage = storage
 	r.clock = clock.New()
-	r.logger = NewRaftLogger(r, DEBUG)
+	r.logger = NewRaftLogger(r.ID, DEBUG)
 	r.requester = NewRaftRequester(r.logger)
-	r.reqc = make(chan interface{})
-	r.respc = make(chan interface{})
+	r.eventc = make(chan raftEv)
 	r.closed = make(chan struct{})
 	return r, nil
 }
 
-func (r *raft) ProcessAppendEntries(req *AppendEntriesRequest) (interface{}, error) {
-	r.reqc <- req
-	resp := <-r.respc
-	return resp, nil
-}
-
-func (r *raft) ProcessCommand(req *CommandRequest) (interface{}, error) {
-	r.reqc <- req
-	resp := <-r.respc
-	return resp, nil
-}
-
-func (r *raft) ProcessRequestVote(req *RequestVoteRequest) (interface{}, error) {
-	r.reqc <- req
-	resp := <-r.respc
+func (r *raft) Process(req interface{}) (interface{}, error) {
+	rr := raftEv{req, make(chan interface{}, 1)}
+	r.eventc <- rr
+	resp := <- rr.respc
+	close(rr.respc)
 	return resp, nil
 }
 
@@ -137,17 +128,17 @@ func (r *raft) loopFollower() {
 			r.setState(CANDIDATE)
 		case <-r.closed:
 			r.closeRaft()
-		case ev := <-r.reqc:
-			switch req := ev.(type) {
+		case ev := <-r.eventc:
+			switch req := ev.req.(type) {
 			case AppendEntriesRequest:
-				r.respc <- r.processAppendEntriesRequest(req)
+				ev.respc <- r.processAppendEntriesRequest(req)
 				electionTimer = r.newElectionTimer()
 			case RequestVoteRequest:
-				r.respc <- r.processRequestVoteRequest(req)
+				ev.respc <- r.processRequestVoteRequest(req)
 			case ShowStatusRequest:
-				r.respc <- r.processShowStatusRequest(req)
+				ev.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for follower: %v", req))
+				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for follower: %v", req))
 			}
 		}
 	}
@@ -175,14 +166,14 @@ func (r *raft) loopCandidate() {
 			} else {
 
 			}
-		case ev := <-r.reqc:
-			switch req := ev.(type) {
+		case ev := <-r.eventc:
+			switch req := ev.req.(type) {
 			case RequestVoteRequest:
-				r.respc <- r.processRequestVoteRequest(req)
+				ev.respc <- r.processRequestVoteRequest(req)
 			case ShowStatusRequest:
-				r.respc <- r.processShowStatusRequest(req)
+				ev.respc <- r.processShowStatusRequest(req)
 			default:
-				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for candidate: %v", req))
+				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for candidate: %v", req))
 			}
 		}
 	}
@@ -197,18 +188,18 @@ func (r *raft) loopLeader() {
 			r.closeRaft()
 		case <-heartbeatTicker.C:
 			l.broadcastHeartbeats()
-		case ev := <-r.reqc:
-			switch req := ev.(type) {
+		case ev := <-r.eventc:
+			switch req := ev.req.(type) {
 			case AppendEntriesRequest:
-				r.respc <- r.processAppendEntriesRequest(req)
+				ev.respc <- r.processAppendEntriesRequest(req)
 			case RequestVoteRequest:
-				r.respc <- r.processRequestVoteRequest(req)
+				ev.respc <- r.processRequestVoteRequest(req)
 			case ShowStatusRequest:
-				r.respc <- r.processShowStatusRequest(req)
+				ev.respc <- r.processShowStatusRequest(req)
 			case CommandRequest:
-				r.respc <- r.processCommandRequest(req)
+				ev.respc <- r.processCommandRequest(req)
 			default:
-				r.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
+				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
 			}
 		}
 	}
@@ -223,8 +214,7 @@ func (r *raft) closeRaft() {
 	r.logger.Infof("raft.close-raft")
 	r.state = CLOSED
 	r.storage.Close()
-	close(r.reqc)
-	close(r.respc)
+	close(r.eventc)
 }
 
 func (r *raft) setState(s string) {
