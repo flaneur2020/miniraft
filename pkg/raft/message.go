@@ -16,7 +16,7 @@ const (
 	kDelete = "delete"
 )
 
-type AppendEntriesRequest struct {
+type AppendEntriesMessage struct {
 	Term         uint64 `json:"term"`
 	LeaderID     string `json:"leaderID"`
 	CommitIndex  uint64 `json:"commitIndex"`
@@ -26,58 +26,58 @@ type AppendEntriesRequest struct {
 	LogEntries []storage.RaftLogEntry `json:"logEntries,omitempty"`
 }
 
-type AppendEntriesResponse struct {
+type AppendEntriesReply struct {
 	Term         uint64 `json:"term"`
 	Success      bool   `json:"success"`
 	Message      string `json:"message"`
 	LastLogIndex uint64 `json:"last_log_index"`
 }
 
-type RequestVoteRequest struct {
+type RequestVoteMessage struct {
 	Term         uint64 `json:"term"`
 	CandidateID  string `json:"candidateID"`
 	LastLogIndex uint64 `json:"lastLogIndex"`
 	LastLogTerm  uint64 `json:"lasstLogTerm"`
 }
 
-type RequestVoteResponse struct {
+type RequestVoteReply struct {
 	Term        uint64 `json:"term"`
 	VoteGranted bool   `json:"voteGranted"`
 	Message     string `json:"message"`
 }
 
-type ShowStatusRequest struct {
+type ShowStatusMessage struct {
 }
 
-type ShowStatusResponse struct {
+type ShowStatusReply struct {
 	Term        uint64               `json:"term"`
 	CommitIndex uint64               `json:"commitIndex"`
 	Peers       map[string]Peer      `json:"peers"`
 	State       string               `json:"state"`
 }
 
-type ServerResponse struct {
+type ServerReply struct {
 	Code    int    `code:"code"`
 	Message string `json:"message"`
 }
 
-type CommandRequest struct {
+type CommandMessage struct {
 	Command storage.RaftCommand `json:"command"`
 }
 
-type CommandResponse struct {
+type CommandReply struct {
 	Message string `json:"message"`
 	Value   []byte `json:"value,omitempty"`
 }
 
-func newRequestVoteResponse(success bool, term uint64, message string) RequestVoteResponse {
-	return RequestVoteResponse{VoteGranted: success, Term: term, Message: message}
+func newRequestVoteReply(success bool, term uint64, message string) RequestVoteReply {
+	return RequestVoteReply{VoteGranted: success, Term: term, Message: message}
 }
 
-func newAppendEntriesResponse(success bool, term uint64, lastLogIndex uint64, message string) AppendEntriesResponse {
-	return AppendEntriesResponse{Success: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
+func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, message string) AppendEntriesReply {
+	return AppendEntriesReply{Success: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
 }
 
-func newServerResponse(code int, message string) ServerResponse {
-	return ServerResponse{Code: code, Message: message}
+func newServerReply(code int, message string) ServerReply {
+	return ServerReply{Code: code, Message: message}
 }

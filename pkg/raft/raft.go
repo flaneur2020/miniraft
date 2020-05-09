@@ -24,7 +24,7 @@ type Peer struct {
 type Raft interface {
 	Tick(n uint64) error
 	Loop()
-	Process(req interface{}) (interface{}, error)
+	Process(msg interface{}) (interface{}, error)
 	Shutdown()
 }
 
@@ -56,12 +56,12 @@ type RaftOptions struct {
 }
 
 type raftEV struct {
-	req   interface{}
-	respc chan interface{}
+	msg    interface{}
+	replyc chan interface{}
 }
 
-func newRaftEV(req interface{}) raftEV {
-	return raftEV{req, make(chan interface{}, 1)}
+func newRaftEV(msg interface{}) raftEV {
+	return raftEV{msg, make(chan interface{}, 1)}
 }
 
 func NewRaft(opt *RaftOptions) (Raft, error) {
@@ -99,12 +99,12 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	return r, nil
 }
 
-func (r *raft) Process(req interface{}) (interface{}, error) {
-	ev := newRaftEV(req)
+func (r *raft) Process(msg interface{}) (interface{}, error) {
+	ev := newRaftEV(msg)
 	r.eventc <- ev
-	resp := <-ev.respc
-	close(ev.respc)
-	return resp, nil
+	reply := <-ev.replyc
+	close(ev.replyc)
+	return reply, nil
 }
 
 func (r *raft) Tick(n uint64) error {
@@ -138,16 +138,16 @@ func (r *raft) loopFollower() {
 		case <-r.closed:
 			r.closeRaft()
 		case ev := <-r.eventc:
-			switch req := ev.req.(type) {
-			case *AppendEntriesRequest:
-				ev.respc <- r.processAppendEntriesRequest(*req)
+			switch msg := ev.msg.(type) {
+			case *AppendEntriesMessage:
+				ev.replyc <- r.processAppendEntriesRequest(*msg)
 				electionTimer = r.newElectionTimer()
-			case *RequestVoteRequest:
-				ev.respc <- r.processRequestVoteRequest(*req)
-			case *ShowStatusRequest:
-				ev.respc <- r.processShowStatusRequest(*req)
+			case *RequestVoteMessage:
+				ev.replyc <- r.processRequestVoteRequest(*msg)
+			case *ShowStatusMessage:
+				ev.replyc <- r.processShowStatusRequest(*msg)
 			default:
-				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request %T for follower: %v", ev.req, ev.req))
+				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
 			}
 		}
 	}
@@ -182,13 +182,13 @@ func (r *raft) loopCandidate() {
 			}
 
 		case ev := <-r.eventc:
-			switch req := ev.req.(type) {
-			case *RequestVoteRequest:
-				ev.respc <- r.processRequestVoteRequest(*req)
-			case *ShowStatusRequest:
-				ev.respc <- r.processShowStatusRequest(*req)
+			switch msg := ev.msg.(type) {
+			case *RequestVoteMessage:
+				ev.replyc <- r.processRequestVoteRequest(*msg)
+			case *ShowStatusMessage:
+				ev.replyc <- r.processShowStatusRequest(*msg)
 			default:
-				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for candidate: %T", req))
+				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
 			}
 		}
 	}
@@ -204,17 +204,17 @@ func (r *raft) loopLeader() {
 		case <-heartbeatTicker.C:
 			r.broadcastHeartbeats()
 		case ev := <-r.eventc:
-			switch req := ev.req.(type) {
-			case *AppendEntriesRequest:
-				ev.respc <- r.processAppendEntriesRequest(*req)
-			case *RequestVoteRequest:
-				ev.respc <- r.processRequestVoteRequest(*req)
-			case *ShowStatusRequest:
-				ev.respc <- r.processShowStatusRequest(*req)
-			case *CommandRequest:
-				ev.respc <- r.processCommandRequest(*req)
+			switch msg := ev.msg.(type) {
+			case *AppendEntriesMessage:
+				ev.replyc <- r.processAppendEntriesRequest(*msg)
+			case *RequestVoteMessage:
+				ev.replyc <- r.processRequestVoteRequest(*msg)
+			case *ShowStatusMessage:
+				ev.replyc <- r.processShowStatusRequest(*msg)
+			case *CommandMessage:
+				ev.replyc <- r.processCommandRequest(*msg)
 			default:
-				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %T", req))
+				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
 			}
 		}
 	}

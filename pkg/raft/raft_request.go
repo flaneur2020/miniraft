@@ -65,13 +65,13 @@ func (r *raft) runElection() bool {
 	return success
 }
 
-func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
+func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteMessage, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	currentTerm := r.storage.MustGetCurrentTerm()
 
-	requests := map[string]*RequestVoteRequest{}
+	requests := map[string]*RequestVoteMessage{}
 	for id := range r.peers {
-		req := RequestVoteRequest{}
+		req := RequestVoteMessage{}
 		req.CandidateID = r.ID
 		req.LastLogIndex = lastLogIndex
 		req.LastLogTerm = lastLogTerm
@@ -81,10 +81,10 @@ func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error
 	return requests, nil
 }
 
-func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
-	requests := map[string]*AppendEntriesRequest{}
+func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
+	requests := map[string]*AppendEntriesMessage{}
 	for id, idx := range nextLogIndexes {
-		request := &AppendEntriesRequest{}
+		request := &AppendEntriesMessage{}
 		request.LeaderID = r.ID
 		request.LogEntries = []storage.RaftLogEntry{}
 		request.Term = r.storage.MustGetCurrentTerm()
