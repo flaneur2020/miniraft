@@ -10,6 +10,8 @@ func (r *raft) broadcastHeartbeats() error {
 	for id, request := range requests {
 		p := r.peers[id]
 		_, err := r.requester.SendAppendEntriesRequest(p, request)
+
+		// TODO: 增加回退 nextLogIndex 逻辑
 		if err != nil {
 			return err
 		}
@@ -18,8 +20,11 @@ func (r *raft) broadcastHeartbeats() error {
 }
 
 // requestVote broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *raft) runElection(grantedC chan bool) error {
-	_assert((r.state == CANDIDATE), "should be candidate")
+func (r *raft) runElection() bool {
+	if r.state != CANDIDATE  {
+		panic("should be candidate")
+	}
+
 	// increase candidate's term and vote for itself
 	currentTerm := r.storage.MustGetCurrentTerm()
 	r.storage.PutCurrentTerm(currentTerm + 1)
@@ -30,33 +35,30 @@ func (r *raft) runElection(grantedC chan bool) error {
 	requests, err := r.buildRequestVoteRequests()
 	if err != nil {
 		r.logger.Debugf("raft.candidate.vote.buildRequestVoteRequests err=%s", err)
-		return err
+		return false
 	}
+
 	peers := map[string]Peer{}
 	for id, p := range r.peers {
 		peers[id] = p
 	}
-	go func() {
-		granted := 0
-		for id, req := range requests {
-			p := peers[id]
-			resp, err := r.requester.SendRequestVoteRequest(p, req)
-			r.logger.Debugf("raft.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
-			if err != nil {
-				continue
-			}
-			if resp.VoteGranted {
-				granted++
-			}
+
+	granted := 0
+	for id, req := range requests {
+		p := peers[id]
+		resp, err := r.requester.SendRequestVoteRequest(p, req)
+		r.logger.Debugf("raft.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
+		if err != nil {
+			continue
 		}
-		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d", granted+1, len(r.peers)+1)
-		if (granted+1)*2 > len(peers)+1 {
-			grantedC <- true
-		} else {
-			grantedC <- false
+		if resp.VoteGranted {
+			granted++
 		}
-	}()
-	return nil
+	}
+
+	success := (granted+1)*2 > len(peers)+1
+	r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
+	return success
 }
 
 func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {

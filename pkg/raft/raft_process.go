@@ -97,7 +97,7 @@ func (r *raft) processCommandRequest(req CommandRequest) CommandResponse {
 		// TODO: await logIndex got commit
 		return CommandResponse{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 	case kGet:
-		v, exists := r.storage.MustGetKv(req.Command.Key)
+		v, exists := r.storage.MustGetKV(req.Command.Key)
 		if !exists {
 			return CommandResponse{Value: nil, Message: "not found"}
 		}

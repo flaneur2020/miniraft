@@ -76,14 +76,16 @@ type mockRaftRequester struct {
 
 func (r *mockRaftRequester) SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error) {
 	raft := r.rafts[p.ID]
-	raft.eventc <- *req
-	resp := (<-raft.respc).(RequestVoteResponse)
+	ev := newRaftEV(req)
+	raft.eventc <- ev
+	resp := (<-ev.respc).(RequestVoteResponse)
 	return &resp, nil
 }
 
 func (r *mockRaftRequester) SendAppendEntriesRequest(p Peer, req *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	raft := r.rafts[p.ID]
-	raft.eventc <- *req
-	resp := (<-raft.respc).(AppendEntriesResponse)
+	ev := newRaftEV(req)
+	raft.eventc <- ev
+	resp := (<-ev.respc).(AppendEntriesResponse)
 	return &resp, nil
 }

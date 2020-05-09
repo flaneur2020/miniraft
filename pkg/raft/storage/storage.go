@@ -1,9 +1,10 @@
-package raft
+package storage
 
 import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/Fleurer/miniraft/pkg/raft"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	lerrors "github.com/syndtr/goleveldb/leveldb/errors"
@@ -18,18 +19,43 @@ const (
 	kLogEntries  = "l:log-entries"
 )
 
-type RaftStorage struct {
+type RaftStorage interface {
+	MustGetKV([]byte) ([]byte, bool)
+	MustPutKV([]byte, []byte) []byte
+	MustDeleteKV([]byte)
+
+	MustGetCurrentTerm() uint64
+	MustGetCommitIndex() uint64
+	MustGetLastApplied() uint64
+	MustGetVotedFor() string
+	MustGetLastLogIndexAndTerm() (uint64, uint64)
+	MustGetLogEntriesSince(index uint64) []raft.RaftLogEntry
+
+	PutCurrentTerm(uint64) error
+	PutLastApplied(uint64) error
+	PutCommitIndex(uint64) error
+	PutVotedFor(string) error
+	AppendLogEntries(entries []raft.RaftLogEntry) error
+	TruncateSince(index uint64)
+
+	Reset()
+	Close()
+}
+
+var _ RaftStorage = &raftStorage{}
+
+type raftStorage struct {
 	db        *leveldb.DB
 	keyPrefix string
 	path      string
 }
 
-func NewRaftStorage(path string, keyPrefix string) (*RaftStorage, error) {
+func NewRaftStorage(path string, keyPrefix string) (RaftStorage, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
 	}
-	s := &RaftStorage{
+	s := &raftStorage{
 		db:        db,
 		path:      path,
 		keyPrefix: keyPrefix,
@@ -37,17 +63,17 @@ func NewRaftStorage(path string, keyPrefix string) (*RaftStorage, error) {
 	return s, nil
 }
 
-func (s *RaftStorage) Reset() {
+func (s *raftStorage) Reset() {
 	s.PutCommitIndex(0)
 	s.PutCurrentTerm(0)
 	s.PutLastApplied(0)
 }
 
-func (s *RaftStorage) Close() {
+func (s *raftStorage) Close() {
 	s.db.Close()
 }
 
-func (s *RaftStorage) MustPutKv(key []byte, value []byte) {
+func (s *raftStorage) MustPutKV(key []byte, value []byte) {
 	k := []byte(fmt.Sprintf("d:%s", key))
 	err := s.db.Put(k, value, nil)
 	if err != nil {
@@ -55,7 +81,7 @@ func (s *RaftStorage) MustPutKv(key []byte, value []byte) {
 	}
 }
 
-func (s *RaftStorage) MustGetKv(key []byte) ([]byte, bool) {
+func (s *raftStorage) MustGetKV(key []byte) ([]byte, bool) {
 	k := []byte(fmt.Sprintf("d:%s", key))
 	buf, err := s.db.Get(k, nil)
 	if err == lerrors.ErrNotFound {
@@ -66,7 +92,7 @@ func (s *RaftStorage) MustGetKv(key []byte) ([]byte, bool) {
 	return buf, true
 }
 
-func (s *RaftStorage) MustDeleteKv(key []byte, value []byte) {
+func (s *raftStorage) MustDeleteKV(key []byte, value []byte) {
 	k := []byte(fmt.Sprintf("d:%s", key))
 	err := s.db.Delete(k, nil)
 	if err != lerrors.ErrNotFound {
@@ -74,7 +100,7 @@ func (s *RaftStorage) MustDeleteKv(key []byte, value []byte) {
 	}
 }
 
-func (s *RaftStorage) MustGetCurrentTerm() uint64 {
+func (s *raftStorage) MustGetCurrentTerm() uint64 {
 	term, err := s.dbGetUint64([]byte(kCurrentTerm))
 	if err == lerrors.ErrNotFound {
 		return 0
@@ -84,11 +110,11 @@ func (s *RaftStorage) MustGetCurrentTerm() uint64 {
 	return term
 }
 
-func (s *RaftStorage) PutCurrentTerm(v uint64) error {
+func (s *raftStorage) PutCurrentTerm(v uint64) error {
 	return s.dbPutUint64([]byte(kCurrentTerm), v)
 }
 
-func (s *RaftStorage) MustGetCommitIndex() uint64 {
+func (s *raftStorage) MustGetCommitIndex() uint64 {
 	r, err := s.dbGetUint64([]byte(kCommitIndex))
 	if err == lerrors.ErrNotFound {
 		return 0
@@ -98,11 +124,11 @@ func (s *RaftStorage) MustGetCommitIndex() uint64 {
 	return r
 }
 
-func (s *RaftStorage) PutCommitIndex(v uint64) error {
+func (s *raftStorage) PutCommitIndex(v uint64) error {
 	return s.dbPutUint64([]byte(kCommitIndex), v)
 }
 
-func (s *RaftStorage) MustGetLastApplied() uint64 {
+func (s *raftStorage) MustGetLastApplied() uint64 {
 	r, err := s.dbGetUint64([]byte(kLastApplied))
 	if err == lerrors.ErrNotFound {
 		return 0
@@ -112,11 +138,11 @@ func (s *RaftStorage) MustGetLastApplied() uint64 {
 	return r
 }
 
-func (s *RaftStorage) PutLastApplied(v uint64) error {
+func (s *raftStorage) PutLastApplied(v uint64) error {
 	return s.dbPutUint64([]byte(kLastApplied), v)
 }
 
-func (s *RaftStorage) MustGetVotedFor() string {
+func (s *raftStorage) MustGetVotedFor() string {
 	v, err := s.dbGetString([]byte(kVotedFor))
 	if err == lerrors.ErrNotFound {
 		return ""
@@ -126,11 +152,11 @@ func (s *RaftStorage) MustGetVotedFor() string {
 	return v
 }
 
-func (s *RaftStorage) PutVotedFor(v string) error {
+func (s *raftStorage) PutVotedFor(v string) error {
 	return s.dbPutString([]byte(kVotedFor), v)
 }
 
-func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
+func (s *raftStorage) AppendLogEntries(entries []raft.RaftLogEntry) error {
 	batch := new(leveldb.Batch)
 	for _, le := range entries {
 		k := makeLogEntryKey(le.Index)
@@ -144,12 +170,12 @@ func (s *RaftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	return nil
 }
 
-func (s *RaftStorage) AppendLogEntriesByCommands(commands []RaftCommand) (uint64, error) {
+func (s *raftStorage) AppendLogEntriesByCommands(commands []raft.RaftCommand) (uint64, error) {
 	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
 	term := s.MustGetCurrentTerm()
-	es := []RaftLogEntry{}
+	es := []raft.RaftLogEntry{}
 	for _, cmd := range commands {
-		le := RaftLogEntry{
+		le := raft.RaftLogEntry{
 			Index:   lastIndex + 1,
 			Term:    term,
 			Command: cmd,
@@ -161,15 +187,15 @@ func (s *RaftStorage) AppendLogEntriesByCommands(commands []RaftCommand) (uint64
 	return lastIndex, err
 }
 
-func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
+func (s *raftStorage) GetLogEntriesSince(index uint64) ([]raft.RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	rg.Start = makeLogEntryKey(index)
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
-	es := []RaftLogEntry{}
+	es := []raft.RaftLogEntry{}
 	for iter.Next() {
 		buf := iter.Value()
-		le := RaftLogEntry{}
+		le := raft.RaftLogEntry{}
 		err := json.Unmarshal(buf, &le)
 		if err != nil {
 			return nil, err
@@ -179,7 +205,7 @@ func (s *RaftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
 	return es, nil
 }
 
-func (s *RaftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
+func (s *raftStorage) MustGetLogEntriesSince(index uint64) []raft.RaftLogEntry {
 	es, err := s.GetLogEntriesSince(index)
 	if err != nil {
 		panic(err)
@@ -187,7 +213,7 @@ func (s *RaftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
 	return es
 }
 
-func (s *RaftStorage) MustTruncateSince(index uint64) {
+func (s *raftStorage) TruncateSince(index uint64) {
 	entries := s.MustGetLogEntriesSince(index)
 	batch := new(leveldb.Batch)
 	for _, entry := range entries {
@@ -199,7 +225,7 @@ func (s *RaftStorage) MustTruncateSince(index uint64) {
 	}
 }
 
-func (s *RaftStorage) getLastLogEntry() (*RaftLogEntry, error) {
+func (s *raftStorage) getLastLogEntry() (*raft.RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	iter := s.db.NewIterator(rg, nil)
 	defer iter.Release()
@@ -208,7 +234,7 @@ func (s *RaftStorage) getLastLogEntry() (*RaftLogEntry, error) {
 		return nil, nil
 	}
 	buf := iter.Value()
-	le := RaftLogEntry{}
+	le := raft.RaftLogEntry{}
 	err := json.Unmarshal(buf, &le)
 	if err != nil {
 		return nil, err
@@ -216,7 +242,7 @@ func (s *RaftStorage) getLastLogEntry() (*RaftLogEntry, error) {
 	return &le, nil
 }
 
-func (s *RaftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
+func (s *raftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
 	le, err := s.getLastLogEntry()
 	if le == nil && err == nil {
 		return 0, 0
@@ -227,7 +253,7 @@ func (s *RaftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
 	return le.Index, le.Term
 }
 
-func (s *RaftStorage) dbGetUint64(k []byte) (uint64, error) {
+func (s *raftStorage) dbGetUint64(k []byte) (uint64, error) {
 	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
 	buf, err := s.db.Get(key, nil)
 	if err != nil {
@@ -237,14 +263,14 @@ func (s *RaftStorage) dbGetUint64(k []byte) (uint64, error) {
 	return n, nil
 }
 
-func (s *RaftStorage) dbPutUint64(k []byte, v uint64) error {
+func (s *raftStorage) dbPutUint64(k []byte, v uint64) error {
 	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, v)
 	return s.db.Put(key, buf, nil)
 }
 
-func (s *RaftStorage) dbGetString(k []byte) (string, error) {
+func (s *raftStorage) dbGetString(k []byte) (string, error) {
 	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
 	buf, err := s.db.Get(key, nil)
 	if err != nil {
@@ -253,7 +279,7 @@ func (s *RaftStorage) dbGetString(k []byte) (string, error) {
 	return string(buf), nil
 }
 
-func (s *RaftStorage) dbPutString(k []byte, v string) error {
+func (s *raftStorage) dbPutString(k []byte, v string) error {
 	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
 	return s.db.Put(key, []byte(v), nil)
 }

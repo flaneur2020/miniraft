@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"github.com/Fleurer/miniraft/pkg/raft/storage"
 	"time"
 
 	"github.com/facebookgo/clock"
@@ -38,10 +39,10 @@ type raft struct {
 	clock             clock.Clock
 
 	logger    *Logger
-	storage   *RaftStorage
+	storage   storage.RaftStorage
 	requester RaftRequester
 
-	eventc chan raftEv
+	eventc chan raftEV
 	closed chan struct{}
 }
 
@@ -53,9 +54,13 @@ type RaftOptions struct {
 	InitialPeers map[string]string `json:"initialPeers"`
 }
 
-type raftEv struct {
+type raftEV struct {
 	req interface{}
 	respc chan interface{}
+}
+
+func newRaftEV(req interface{}) raftEV {
+	return raftEV{req, make(chan interface{}, 1)}
 }
 
 func NewRaft(opt *RaftOptions) (Raft, error) {
@@ -72,7 +77,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	}
 
 	prefix := fmt.Sprintf("rft:%s:", opt.ID)
-	storage, err := NewRaftStorage(opt.StoragePath, prefix)
+	s, err := storage.NewRaftStorage(opt.StoragePath, prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -83,21 +88,21 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	r.heartbeatInterval = 100 * time.Millisecond
 	r.electionTimeout = 5 * time.Second
 	r.peers = peers
-	r.storage = storage
+	r.storage = s
 	r.nextLogIndexes = map[string]uint64{}
 	r.clock = clock.New()
 	r.logger = NewRaftLogger(r.ID, DEBUG)
 	r.requester = NewRaftRequester(r.logger)
-	r.eventc = make(chan raftEv)
+	r.eventc = make(chan raftEV)
 	r.closed = make(chan struct{})
 	return r, nil
 }
 
 func (r *raft) Process(req interface{}) (interface{}, error) {
-	rr := raftEv{req, make(chan interface{}, 1)}
-	r.eventc <- rr
-	resp := <- rr.respc
-	close(rr.respc)
+	ev := newRaftEV(req)
+	r.eventc <- ev
+	resp := <- ev.respc
+	close(ev.respc)
 	return resp, nil
 }
 
@@ -152,23 +157,29 @@ func (r *raft) loopFollower() {
 // 另一台机器宣称自己赢得选举；
 // 一段时间过后没有赢家
 func (r *raft) loopCandidate() {
-	grantedC := make(chan bool)
+	electionResultC := make(chan bool)
 	electionTimer := r.newElectionTimer()
-	r.runElection(grantedC)
+	go func() {
+		electionResultC <- r.runElection()
+	}()
+
 	for r.state == CANDIDATE {
 		select {
 		case <-r.closed:
 			r.closeRaft()
+
 		case <-electionTimer.C:
-			r.runElection(grantedC)
+			go func() {
+				electionResultC <- r.runElection()
+			}()
 			electionTimer = r.newElectionTimer()
-		case granted := <-grantedC:
-			if granted {
+
+		case ok := <-electionResultC:
+			if ok {
 				r.setState(LEADER)
 				continue
-			} else {
-
 			}
+
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
 			case RequestVoteRequest:
