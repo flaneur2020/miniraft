@@ -71,7 +71,7 @@ func Test_RaftRequest(t *testing.T) {
 	}()
 
 	req := &AppendEntriesMessage{}
-	resp, err := raft1.requester.SendAppendEntriesRequest(raft1.peers["r2"], req)
+	resp, err := raft1.requester.SendAppendEntries(raft1.peers["r2"], req)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, resp, &AppendEntriesReply{Term: 0x0, Success: true, Message: "success", LastLogIndex: 0x0})
 

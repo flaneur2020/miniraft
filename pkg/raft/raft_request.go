@@ -5,15 +5,15 @@ import (
 )
 
 func (r *raft) broadcastHeartbeats() error {
-	requests, err := r.buildAppendEntriesRequests(r.nextLogIndexes)
+	messages, err := r.buildAppendEntriesMessages(r.nextLogIndexes)
 	if err != nil {
 		return err
 	}
 
-	r.logger.Debugf("leader.broadcast-heartbeats requests=%v", requests)
-	for id, request := range requests {
+	r.logger.Debugf("leader.broadcast-heartbeats messages=%v", messages)
+	for id, msg := range messages {
 		p := r.peers[id]
-		_, err := r.requester.SendAppendEntriesRequest(p, request)
+		_, err := r.requester.SendAppendEntries(p, msg)
 
 		// TODO: 增加回退 nextLogIndex 逻辑
 		if err != nil {
@@ -35,10 +35,10 @@ func (r *raft) runElection() bool {
 	r.storage.PutVotedFor(r.ID)
 	r.logger.Debugf("raft.candidate.vote term=%d votedFor=%s", currentTerm, r.ID)
 
-	// send requestVote requests asynchronously, collect the vote results into grantedC
-	requests, err := r.buildRequestVoteRequests()
+	// send requestVote messages asynchronously, collect the vote results into grantedC
+	messages, err := r.buildRequestVoteMessages()
 	if err != nil {
-		r.logger.Debugf("raft.candidate.vote.buildRequestVoteRequests err=%s", err)
+		r.logger.Debugf("raft.candidate.vote.buildRequestVoteMessages err=%s", err)
 		return false
 	}
 
@@ -48,9 +48,9 @@ func (r *raft) runElection() bool {
 	}
 
 	granted := 0
-	for id, req := range requests {
+	for id, msg := range messages {
 		p := peers[id]
-		resp, err := r.requester.SendRequestVoteRequest(p, req)
+		resp, err := r.requester.SendRequestVote(p, msg)
 		r.logger.Debugf("raft.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
 		if err != nil {
 			continue
@@ -65,45 +65,45 @@ func (r *raft) runElection() bool {
 	return success
 }
 
-func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteMessage, error) {
+func (r *raft) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	currentTerm := r.storage.MustGetCurrentTerm()
 
-	requests := map[string]*RequestVoteMessage{}
+	messages := map[string]*RequestVoteMessage{}
 	for id := range r.peers {
-		req := RequestVoteMessage{}
-		req.CandidateID = r.ID
-		req.LastLogIndex = lastLogIndex
-		req.LastLogTerm = lastLogTerm
-		req.Term = currentTerm
-		requests[id] = &req
+		msg := RequestVoteMessage{}
+		msg.CandidateID = r.ID
+		msg.LastLogIndex = lastLogIndex
+		msg.LastLogTerm = lastLogTerm
+		msg.Term = currentTerm
+		messages[id] = &msg
 	}
-	return requests, nil
+	return messages, nil
 }
 
-func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
-	requests := map[string]*AppendEntriesMessage{}
+func (r *raft) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
+	messages := map[string]*AppendEntriesMessage{}
 	for id, idx := range nextLogIndexes {
-		request := &AppendEntriesMessage{}
-		request.LeaderID = r.ID
-		request.LogEntries = []storage.RaftLogEntry{}
-		request.Term = r.storage.MustGetCurrentTerm()
-		request.CommitIndex = r.storage.MustGetCommitIndex()
+		msg := &AppendEntriesMessage{}
+		msg.LeaderID = r.ID
+		msg.LogEntries = []storage.RaftLogEntry{}
+		msg.Term = r.storage.MustGetCurrentTerm()
+		msg.CommitIndex = r.storage.MustGetCommitIndex()
 
 		if idx == 0 {
-			request.PrevLogIndex = 0
-			request.PrevLogTerm = 0
+			msg.PrevLogIndex = 0
+			msg.PrevLogTerm = 0
 		} else {
 			logEntries := r.storage.MustGetLogEntriesSince(idx - 1)
 			if len(logEntries) >= 1 {
-				request.PrevLogIndex = logEntries[0].Index
-				request.PrevLogTerm = logEntries[0].Term
+				msg.PrevLogIndex = logEntries[0].Index
+				msg.PrevLogTerm = logEntries[0].Term
 			}
 			if len(logEntries) >= 2 {
-				request.LogEntries = logEntries[1:]
+				msg.LogEntries = logEntries[1:]
 			}
 		}
-		requests[id] = request
+		messages[id] = msg
 	}
-	return requests, nil
+	return messages, nil
 }

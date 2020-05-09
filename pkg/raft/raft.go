@@ -134,18 +134,18 @@ func (r *raft) loopFollower() {
 		select {
 		case <-electionTimer.C:
 			r.logger.Infof("follower.loop.electionTimeout")
-			r.setState(CANDIDATE)
+			r.become(CANDIDATE)
 		case <-r.closed:
 			r.closeRaft()
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
-				ev.replyc <- r.processAppendEntriesRequest(*msg)
+				ev.replyc <- r.processAppendEntries(*msg)
 				electionTimer = r.newElectionTimer()
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVoteRequest(*msg)
+				ev.replyc <- r.processRequestVote(*msg)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatusRequest(*msg)
+				ev.replyc <- r.processShowStatus(*msg)
 			default:
 				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
 			}
@@ -177,16 +177,16 @@ func (r *raft) loopCandidate() {
 
 		case ok := <-electionResultC:
 			if ok {
-				r.setState(LEADER)
+				r.become(LEADER)
 				continue
 			}
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVoteRequest(*msg)
+				ev.replyc <- r.processRequestVote(*msg)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatusRequest(*msg)
+				ev.replyc <- r.processShowStatus(*msg)
 			default:
 				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
 			}
@@ -206,17 +206,120 @@ func (r *raft) loopLeader() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
-				ev.replyc <- r.processAppendEntriesRequest(*msg)
+				ev.replyc <- r.processAppendEntries(*msg)
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVoteRequest(*msg)
+				ev.replyc <- r.processRequestVote(*msg)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatusRequest(*msg)
+				ev.replyc <- r.processShowStatus(*msg)
 			case *CommandMessage:
-				ev.replyc <- r.processCommandRequest(*msg)
+				ev.replyc <- r.processCommand(*msg)
 			default:
 				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
 			}
 		}
+	}
+}
+
+func (r *raft) processShowStatus(msg ShowStatusMessage) ShowStatusReply {
+	b := ShowStatusReply{}
+	b.Term = r.storage.MustGetCurrentTerm()
+	b.CommitIndex = r.storage.MustGetCommitIndex()
+	b.Peers = r.peers
+	b.State = r.state
+	return b
+}
+
+func (r *raft) processAppendEntries(msg AppendEntriesMessage) AppendEntriesReply {
+	currentTerm := r.storage.MustGetCurrentTerm()
+	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
+
+	// r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, currentTerm, lastLogIndex)
+
+	if msg.Term < currentTerm {
+		return newAppendEntriesReply(false, currentTerm, lastLogIndex, "msg.Term < currentTerm")
+	}
+
+	if msg.Term == currentTerm {
+		if r.state == LEADER {
+			return newAppendEntriesReply(false, currentTerm, lastLogIndex, "i'm leader")
+		}
+		if r.state == CANDIDATE {
+			// while waiting for votes, a candidate may receive an AppendEntries RPC from another server claiming to be leader
+			// if the leader's term is at least as large as the candidate's current term, then the candidate recognizes the leader
+			// as legitimate and returns to follower state.
+			r.become(FOLLOWER)
+		}
+	}
+
+	if msg.Term > currentTerm {
+		r.become(FOLLOWER)
+		r.storage.PutCurrentTerm(msg.Term)
+		r.storage.PutVotedFor("")
+	}
+
+	if msg.PrevLogIndex > lastLogIndex {
+		return newAppendEntriesReply(false, currentTerm, lastLogIndex, "log not match")
+	}
+
+	if msg.PrevLogIndex < lastLogIndex {
+		r.storage.TruncateSince(msg.PrevLogIndex + 1)
+	}
+
+	r.storage.AppendLogEntries(msg.LogEntries)
+	r.storage.PutCommitIndex(msg.CommitIndex)
+
+	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
+	return newAppendEntriesReply(true, currentTerm, lastLogIndex, "success")
+}
+
+func (r *raft) processRequestVote(msg RequestVoteMessage) RequestVoteReply {
+	currentTerm := r.storage.MustGetCurrentTerm()
+	votedFor := r.storage.MustGetVotedFor()
+	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+
+	r.logger.Debugf("raft.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, currentTerm, votedFor, lastLogIndex, lastLogTerm)
+	// if the caller's term smaller than mine, refuse
+	if msg.Term < currentTerm {
+		return newRequestVoteReply(false, currentTerm, fmt.Sprintf("msg.term: %d < curremtTerm: %d", msg.Term, currentTerm))
+	}
+
+	// if the term is equal and we've already voted for another candidate
+	if msg.Term == currentTerm && votedFor != "" && votedFor != msg.CandidateID {
+		return newRequestVoteReply(false, currentTerm, fmt.Sprintf("I've already voted another candidate: %s", votedFor))
+	}
+
+	// if the caller's term bigger than my term: set currentTerm = T, convert to follower
+	if msg.Term > currentTerm {
+		r.become(FOLLOWER)
+		r.storage.PutCurrentTerm(msg.Term)
+		r.storage.PutVotedFor(msg.CandidateID)
+	}
+
+	// if the candidate's log is not at least as update as our last log
+	if lastLogIndex > msg.LastLogIndex || lastLogTerm > msg.LastLogTerm {
+		return newRequestVoteReply(false, currentTerm, "candidate's log not at least as update as our last log")
+	}
+
+	r.storage.PutVotedFor(msg.CandidateID)
+	return newRequestVoteReply(true, currentTerm, "cheers, granted")
+}
+
+func (r *raft) processCommand(req CommandMessage) CommandReply {
+	switch req.Command.OpType {
+	case kNop:
+		return CommandReply{Value: []byte{}, Message: "nop"}
+	case kPut:
+		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command})
+		// TODO: await logIndex got commit
+		return CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
+	case kGet:
+		v, exists := r.storage.MustGetKV(req.Command.Key)
+		if !exists {
+			return CommandReply{Value: nil, Message: "not found"}
+		}
+		return CommandReply{Value: v, Message: "success"}
+	default:
+		panic(fmt.Sprintf("unexpected opType: %s", req.Command.OpType))
 	}
 }
 
@@ -239,7 +342,7 @@ func (r *raft) closeRaft() {
 	close(r.eventc)
 }
 
-func (r *raft) setState(s string) {
+func (r *raft) become(s string) {
 	r.logger.Debugf("raft.set-state state=%s", s)
 	r.state = s
 }
