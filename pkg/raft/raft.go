@@ -2,8 +2,9 @@ package raft
 
 import (
 	"fmt"
-	"github.com/Fleurer/miniraft/pkg/storage"
 	"time"
+
+	"github.com/Fleurer/miniraft/pkg/storage"
 
 	"github.com/facebookgo/clock"
 )
@@ -55,7 +56,7 @@ type RaftOptions struct {
 }
 
 type raftEV struct {
-	req interface{}
+	req   interface{}
 	respc chan interface{}
 }
 
@@ -101,7 +102,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 func (r *raft) Process(req interface{}) (interface{}, error) {
 	ev := newRaftEV(req)
 	r.eventc <- ev
-	resp := <- ev.respc
+	resp := <-ev.respc
 	close(ev.respc)
 	return resp, nil
 }
@@ -111,7 +112,7 @@ func (r *raft) Tick(n uint64) error {
 }
 
 func (r *raft) Loop() {
-	r.logger.Infof("raft.loop.start: storage=%s peers=%v", r.storage.path, r.peers)
+	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
 	for {
 		switch r.state {
 		case FOLLOWER:
@@ -138,15 +139,15 @@ func (r *raft) loopFollower() {
 			r.closeRaft()
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
-			case data.AppendEntriesRequest:
-				ev.respc <- r.processAppendEntriesRequest(req)
+			case *AppendEntriesRequest:
+				ev.respc <- r.processAppendEntriesRequest(*req)
 				electionTimer = r.newElectionTimer()
-			case data.RequestVoteRequest:
-				ev.respc <- r.processRequestVoteRequest(req)
-			case data.ShowStatusRequest:
-				ev.respc <- r.processShowStatusRequest(req)
+			case *RequestVoteRequest:
+				ev.respc <- r.processRequestVoteRequest(*req)
+			case *ShowStatusRequest:
+				ev.respc <- r.processShowStatusRequest(*req)
 			default:
-				ev.respc <- data.newServerResponse(400, fmt.Sprintf("invalid request for follower: %v", req))
+				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request %T for follower: %v", ev.req, ev.req))
 			}
 		}
 	}
@@ -182,12 +183,12 @@ func (r *raft) loopCandidate() {
 
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
-			case data.RequestVoteRequest:
-				ev.respc <- r.processRequestVoteRequest(req)
-			case data.ShowStatusRequest:
-				ev.respc <- r.processShowStatusRequest(req)
+			case *RequestVoteRequest:
+				ev.respc <- r.processRequestVoteRequest(*req)
+			case *ShowStatusRequest:
+				ev.respc <- r.processShowStatusRequest(*req)
 			default:
-				ev.respc <- data.newServerResponse(400, fmt.Sprintf("invalid request for candidate: %v", req))
+				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for candidate: %T", req))
 			}
 		}
 	}
@@ -204,16 +205,16 @@ func (r *raft) loopLeader() {
 			r.broadcastHeartbeats()
 		case ev := <-r.eventc:
 			switch req := ev.req.(type) {
-			case data.AppendEntriesRequest:
-				ev.respc <- r.processAppendEntriesRequest(req)
-			case data.RequestVoteRequest:
-				ev.respc <- r.processRequestVoteRequest(req)
-			case data.ShowStatusRequest:
-				ev.respc <- r.processShowStatusRequest(req)
-			case data.CommandRequest:
-				ev.respc <- r.processCommandRequest(req)
+			case *AppendEntriesRequest:
+				ev.respc <- r.processAppendEntriesRequest(*req)
+			case *RequestVoteRequest:
+				ev.respc <- r.processRequestVoteRequest(*req)
+			case *ShowStatusRequest:
+				ev.respc <- r.processShowStatusRequest(*req)
+			case *CommandRequest:
+				ev.respc <- r.processCommandRequest(*req)
 			default:
-				ev.respc <- data.newServerResponse(400, fmt.Sprintf("invalid request for leader: %v", req))
+				ev.respc <- newServerResponse(400, fmt.Sprintf("invalid request for leader: %T", req))
 			}
 		}
 	}

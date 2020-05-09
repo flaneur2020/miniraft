@@ -1,6 +1,8 @@
 package raft
 
-import "github.com/Fleurer/miniraft/pkg/data"
+import (
+	"github.com/Fleurer/miniraft/pkg/storage"
+)
 
 func (r *raft) broadcastHeartbeats() error {
 	requests, err := r.buildAppendEntriesRequests(r.nextLogIndexes)
@@ -21,9 +23,9 @@ func (r *raft) broadcastHeartbeats() error {
 	return nil
 }
 
-// requestVote broadcasts the requestVote messages, and collect the vote result asynchronously.
+// runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
 func (r *raft) runElection() bool {
-	if r.state != CANDIDATE  {
+	if r.state != CANDIDATE {
 		panic("should be candidate")
 	}
 
@@ -63,13 +65,13 @@ func (r *raft) runElection() bool {
 	return success
 }
 
-func (r *raft) buildRequestVoteRequests() (map[string]*data.RequestVoteRequest, error) {
+func (r *raft) buildRequestVoteRequests() (map[string]*RequestVoteRequest, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	currentTerm := r.storage.MustGetCurrentTerm()
 
-	requests := map[string]*data.RequestVoteRequest{}
+	requests := map[string]*RequestVoteRequest{}
 	for id := range r.peers {
-		req := data.RequestVoteRequest{}
+		req := RequestVoteRequest{}
 		req.CandidateID = r.ID
 		req.LastLogIndex = lastLogIndex
 		req.LastLogTerm = lastLogTerm
@@ -79,12 +81,12 @@ func (r *raft) buildRequestVoteRequests() (map[string]*data.RequestVoteRequest, 
 	return requests, nil
 }
 
-func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*data.AppendEntriesRequest, error) {
-	requests := map[string]*data.AppendEntriesRequest{}
+func (r *raft) buildAppendEntriesRequests(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesRequest, error) {
+	requests := map[string]*AppendEntriesRequest{}
 	for id, idx := range nextLogIndexes {
-		request := &data.AppendEntriesRequest{}
+		request := &AppendEntriesRequest{}
 		request.LeaderID = r.ID
-		request.LogEntries = []data.RaftLogEntry{}
+		request.LogEntries = []storage.RaftLogEntry{}
 		request.Term = r.storage.MustGetCurrentTerm()
 		request.CommitIndex = r.storage.MustGetCommitIndex()
 

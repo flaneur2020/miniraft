@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"github.com/Fleurer/miniraft/pkg/data"
 	"os"
 	"testing"
 	"time"
@@ -71,9 +70,10 @@ func Test_RaftRequest(t *testing.T) {
 		raft3.Shutdown()
 	}()
 
-	req := &data.AppendEntriesRequest{}
-	resp, _ := raft1.requester.SendAppendEntriesRequest(raft1.peers["r2"], req)
-	assert.Equal(t, resp, &data.AppendEntriesResponse{Term: 0x0, Success: true, Message: "success", LastLogIndex: 0x0})
+	req := &AppendEntriesRequest{}
+	resp, err := raft1.requester.SendAppendEntriesRequest(raft1.peers["r2"], req)
+	assert.Equal(t, err, nil)
+	assert.Equal(t, resp, &AppendEntriesResponse{Term: 0x0, Success: true, Message: "success", LastLogIndex: 0x0})
 
 	assert.Equal(t, raft1.state, FOLLOWER)
 	assert.Equal(t, raft2.state, FOLLOWER)

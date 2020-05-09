@@ -23,28 +23,28 @@ func NewRaftLogger(raftID string, level int) *Logger {
 
 func (l *Logger) Debugf(format string, args ...interface{}) {
 	if l.level >= DEBUG {
-		format = fmt.Sprintf("[DEBUG] [%s:%s] %s", l.raftID, format)
+		format = fmt.Sprintf("[DEBUG] [%s] %s", l.raftID, format)
 		log.Printf(format, args...)
 	}
 }
 
 func (l *Logger) Infof(format string, args ...interface{}) {
 	if l.level >= INFO {
-		format = fmt.Sprintf("[INFO] [%s:%s] %s", l.raftID, format)
+		format = fmt.Sprintf("[INFO] [%s] %s", l.raftID, format)
 		log.Printf(format, args...)
 	}
 }
 
 func (l *Logger) Warnf(format string, args ...interface{}) {
 	if l.level >= WARN {
-		format = fmt.Sprintf("[WARN] [%s:%s] %s", l.raft.ID, l.raft.state, format)
+		format = fmt.Sprintf("[WARN] [%s] %s", l.raftID, format)
 		log.Printf(format, args...)
 	}
 }
 
 func (l *Logger) Errorf(format string, args ...interface{}) {
 	if l.level >= ERROR {
-		format = fmt.Sprintf("[ERROR] [%s:%s] %s", l.raft.ID, l.raft.state, format)
+		format = fmt.Sprintf("[ERROR] [%s] %s", l.raftID, format)
 		log.Printf(format, args...)
 	}
 }

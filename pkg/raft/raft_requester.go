@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/Fleurer/miniraft/pkg/data"
 	"io/ioutil"
 	"net/http"
 	"time"
 )
 
 type RaftRequester interface {
-	SendRequestVoteRequest(p Peer, req *data.RequestVoteRequest) (*data.RequestVoteResponse, error)
-	SendAppendEntriesRequest(p Peer, req *data.AppendEntriesRequest) (*data.AppendEntriesResponse, error)
+	SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error)
+	SendAppendEntriesRequest(p Peer, req *AppendEntriesRequest) (*AppendEntriesResponse, error)
 }
 
 type raftRequester struct {
@@ -23,9 +22,9 @@ func NewRaftRequester(logger *Logger) RaftRequester {
 	return &raftRequester{logger: logger}
 }
 
-func (rr *raftRequester) SendAppendEntriesRequest(p Peer, request *data.AppendEntriesRequest) (*data.AppendEntriesResponse, error) {
+func (rr *raftRequester) SendAppendEntriesRequest(p Peer, request *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
-	resp := data.AppendEntriesResponse{}
+	resp := AppendEntriesResponse{}
 	err := rr.post(p, url, request, &resp)
 	// rr.logger.Debugf("raft.request.send-append-entries to=%s req=%#v err=%s", p.ID, request, err)
 	if err != nil {
@@ -34,9 +33,9 @@ func (rr *raftRequester) SendAppendEntriesRequest(p Peer, request *data.AppendEn
 	return &resp, nil
 }
 
-func (rr *raftRequester) SendRequestVoteRequest(p Peer, request *data.RequestVoteRequest) (*data.RequestVoteResponse, error) {
+func (rr *raftRequester) SendRequestVoteRequest(p Peer, request *RequestVoteRequest) (*RequestVoteResponse, error) {
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
-	resp := data.RequestVoteResponse{}
+	resp := RequestVoteResponse{}
 	err := rr.post(p, url, request, &resp)
 	rr.logger.Debugf("raft.request.send-request vote to=%s req=%#v err=%s", p.ID, request, err)
 	if err != nil {
@@ -75,18 +74,30 @@ type mockRaftRequester struct {
 	rafts map[string]*raft
 }
 
-func (r *mockRaftRequester) SendRequestVoteRequest(p Peer, req *data.RequestVoteRequest) (*data.RequestVoteResponse, error) {
+func (r *mockRaftRequester) SendRequestVoteRequest(p Peer, req *RequestVoteRequest) (*RequestVoteResponse, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
 	raft.eventc <- ev
-	resp := (<-ev.respc).(data.RequestVoteResponse)
-	return &resp, nil
+	resp := (<-ev.respc)
+	if r, ok := resp.(ServerResponse); ok {
+		return nil, fmt.Errorf("bad result: %s", r.Message)
+	} else if r, ok := resp.(RequestVoteResponse); ok {
+		return &r, nil
+	} else {
+		return nil, fmt.Errorf("unknown type")
+	}
 }
 
-func (r *mockRaftRequester) SendAppendEntriesRequest(p Peer, req *data.AppendEntriesRequest) (*data.AppendEntriesResponse, error) {
+func (r *mockRaftRequester) SendAppendEntriesRequest(p Peer, req *AppendEntriesRequest) (*AppendEntriesResponse, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
 	raft.eventc <- ev
-	resp := (<-ev.respc).(data.AppendEntriesResponse)
-	return &resp, nil
+	resp := <-ev.respc
+	if r, ok := resp.(ServerResponse); ok {
+		return nil, fmt.Errorf("bad result: %s", r.Message)
+	} else if r, ok := resp.(AppendEntriesResponse); ok {
+		return &r, nil
+	} else {
+		return nil, fmt.Errorf("unknown type")
+	}
 }

@@ -3,7 +3,6 @@ package raft
 import (
 	"context"
 	"encoding/json"
-	"github.com/Fleurer/miniraft/pkg/data"
 	"io/ioutil"
 	"net/http"
 )
@@ -36,15 +35,15 @@ func (s *RaftServer) ListenAndServe() error {
 }
 
 func (s *RaftServer) handleHealth(w http.ResponseWriter, r *http.Request) {
-	s.response(w, data.ServerResponse{Code: data.SUCCESS, Message: "health"})
+	s.response(w, ServerResponse{Code: SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleStatus(w http.ResponseWriter, r *http.Request) {
-	s.response(w, data.ServerResponse{Code: data.SUCCESS, Message: "health"})
+	s.response(w, ServerResponse{Code: SUCCESS, Message: "health"})
 }
 
 func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request) {
-	req := data.AppendEntriesRequest{}
+	req := AppendEntriesRequest{}
 	err := s.parseRequest(r, &req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
@@ -61,7 +60,7 @@ func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
-	req := data.RequestVoteRequest{}
+	req := RequestVoteRequest{}
 	err := s.parseRequest(r, &req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
@@ -78,7 +77,7 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
-	req := data.CommandRequest{}
+	req := CommandRequest{}
 	err := s.parseRequest(r, &req)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
