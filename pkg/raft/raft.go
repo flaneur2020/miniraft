@@ -19,6 +19,15 @@ type Peer struct {
 	Addr string
 }
 
+type Raft interface {
+	Tick(n uint64) error
+	Loop()
+	ProcessRequestVote(req *RequestVoteRequest) (*RequestVoteResponse, error)
+	ProcessAppendEntries(req *AppendEntriesRequest) (*AppendEntriesResponse, error)
+	ProcessCommand(req *CommandRequest) (*CommandResponse, error)
+	Shutdown()
+}
+
 type raft struct {
 	ID    string
 	state string
@@ -45,7 +54,11 @@ type RaftOptions struct {
 	InitialPeers map[string]string `json:"initialPeers"`
 }
 
-func NewRaft(opt *RaftOptions) (*raft, error) {
+func NewRaft(opt *RaftOptions) (Raft, error) {
+	return newRaft(opt)
+}
+
+func newRaft(opt *RaftOptions) (*raft, error) {
 	peers := map[string]Peer{}
 	for id, addr := range opt.InitialPeers {
 		if id == opt.ID {
@@ -74,6 +87,28 @@ func NewRaft(opt *RaftOptions) (*raft, error) {
 	r.respc = make(chan interface{})
 	r.closed = make(chan struct{})
 	return r, nil
+}
+
+func (r *raft) ProcessAppendEntries(req *AppendEntriesRequest) (*AppendEntriesResponse, error) {
+	r.reqc <- req
+	resp := <-r.respc
+	return resp.(*AppendEntriesResponse), nil
+}
+
+func (r *raft) ProcessCommand(req *CommandRequest) (*CommandResponse, error) {
+	r.reqc <- req
+	resp := <-r.respc
+	return resp.(*CommandResponse), nil
+}
+
+func (r *raft) ProcessRequestVote(req *RequestVoteRequest) (*RequestVoteResponse, error) {
+	r.reqc <- req
+	resp := <-r.respc
+	return resp.(*RequestVoteResponse), nil
+}
+
+func (r *raft) Tick(n uint64) error {
+	return nil
 }
 
 func (r *raft) Loop() {

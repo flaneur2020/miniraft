@@ -8,7 +8,7 @@ import (
 )
 
 type RaftServer struct {
-	raft       *raft
+	raft       Raft
 	listenAddr string
 	httpServer *http.Server
 }
@@ -30,7 +30,6 @@ func NewRaftServer(opt *RaftOptions) (*RaftServer, error) {
 }
 
 func (s *RaftServer) ListenAndServe() error {
-	s.raft.logger.Infof("server start: listen=%s", s.listenAddr)
 	go s.raft.Loop()
 	return s.httpServer.ListenAndServe()
 }
@@ -50,8 +49,13 @@ func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request)
 		s.responseError(w, 400, err.Error())
 		return
 	}
-	s.raft.reqc <- req
-	resp := <-s.raft.respc
+
+	resp, err := s.raft.ProcessAppendEntries(&req)
+	if err != nil {
+		s.responseError(w, 400, err.Error())
+		return
+	}
+
 	s.response(w, resp)
 }
 
@@ -62,8 +66,13 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 		s.responseError(w, 400, err.Error())
 		return
 	}
-	s.raft.reqc <- req
-	resp := <-s.raft.respc
+
+	resp, err := s.raft.ProcessRequestVote(&req)
+	if err != nil {
+		s.responseError(w, 400, err.Error())
+		return
+	}
+
 	s.response(w, resp)
 }
 
@@ -74,8 +83,13 @@ func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
 		s.responseError(w, 400, err.Error())
 		return
 	}
-	s.raft.reqc <- req
-	resp := <-s.raft.respc
+
+	resp, err := s.raft.ProcessCommand(&req)
+	if err != nil {
+		s.responseError(w, 400, err.Error())
+		return
+	}
+
 	s.response(w, resp)
 }
 
@@ -111,7 +125,6 @@ func (s *RaftServer) responseError(w http.ResponseWriter, code int, message stri
 }
 
 func (s *RaftServer) Shutdown() error {
-	s.raft.logger.Infof("closing raft server: listen=%s", s.listenAddr)
 	s.raft.Shutdown()
 	ctx := context.TODO()
 	return s.httpServer.Shutdown(ctx)

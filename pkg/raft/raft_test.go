@@ -18,9 +18,9 @@ func makeRaftInstances() (*raft, *raft, *raft, *clock.Mock) {
 	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft-test/r02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
 	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raft-test/r03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
 
-	raft1, _ := NewRaft(opt1)
-	raft2, _ := NewRaft(opt2)
-	raft3, _ := NewRaft(opt3)
+	raft1, _ := newRaft(opt1)
+	raft2, _ := newRaft(opt2)
+	raft3, _ := newRaft(opt3)
 
 	requester := &mockRaftRequester{map[string]*raft{"r1": raft1, "r2": raft2, "r3": raft3}}
 	clock := clock.NewMock()
@@ -53,7 +53,7 @@ func Test_NewRaft(t *testing.T) {
 			"r3": "192.168.0.1:4503",
 		},
 	}
-	r, err := NewRaft(opt)
+	r, err := newRaft(opt)
 	assert.Nil(t, err)
 	assert.Equal(t, r.ID, opt.ID)
 	assert.Equal(t, r.state, FOLLOWER)
