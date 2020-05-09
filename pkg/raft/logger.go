@@ -5,8 +5,8 @@ import (
 	"log"
 )
 
-type RaftLogger struct {
-	raft  *raft
+type Logger struct {
+	raftID string
 	level int
 }
 
@@ -17,32 +17,32 @@ var (
 	DEBUG = 4
 )
 
-func NewRaftLogger(raft *raft, level int) *RaftLogger {
-	return &RaftLogger{raft: raft, level: level}
+func NewRaftLogger(raftID string, level int) *Logger {
+	return &Logger{raftID: raftID, level: level}
 }
 
-func (l *RaftLogger) Debugf(format string, args ...interface{}) {
+func (l *Logger) Debugf(format string, args ...interface{}) {
 	if l.level >= DEBUG {
-		format = fmt.Sprintf("[DEBUG] [%s:%s] %s", l.raft.ID, l.raft.state, format)
+		format = fmt.Sprintf("[DEBUG] [%s:%s] %s", l.raftID, format)
 		log.Printf(format, args...)
 	}
 }
 
-func (l *RaftLogger) Infof(format string, args ...interface{}) {
+func (l *Logger) Infof(format string, args ...interface{}) {
 	if l.level >= INFO {
-		format = fmt.Sprintf("[INFO] [%s:%s] %s", l.raft.ID, l.raft.state, format)
+		format = fmt.Sprintf("[INFO] [%s:%s] %s", l.raftID, format)
 		log.Printf(format, args...)
 	}
 }
 
-func (l *RaftLogger) Warnf(format string, args ...interface{}) {
+func (l *Logger) Warnf(format string, args ...interface{}) {
 	if l.level >= WARN {
 		format = fmt.Sprintf("[WARN] [%s:%s] %s", l.raft.ID, l.raft.state, format)
 		log.Printf(format, args...)
 	}
 }
 
-func (l *RaftLogger) Errorf(format string, args ...interface{}) {
+func (l *Logger) Errorf(format string, args ...interface{}) {
 	if l.level >= ERROR {
 		format = fmt.Sprintf("[ERROR] [%s:%s] %s", l.raft.ID, l.raft.state, format)
 		log.Printf(format, args...)

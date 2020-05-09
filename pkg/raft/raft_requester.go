@@ -15,10 +15,10 @@ type RaftRequester interface {
 }
 
 type raftRequester struct {
-	logger *RaftLogger
+	logger *Logger
 }
 
-func NewRaftRequester(logger *RaftLogger) RaftRequester {
+func NewRaftRequester(logger *Logger) RaftRequester {
 	return &raftRequester{logger: logger}
 }
 

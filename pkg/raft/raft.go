@@ -37,7 +37,7 @@ type raft struct {
 	electionTimeout   time.Duration
 	clock             clock.Clock
 
-	logger    *RaftLogger
+	logger    *Logger
 	storage   *RaftStorage
 	requester RaftRequester
 
