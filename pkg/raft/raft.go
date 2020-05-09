@@ -41,7 +41,7 @@ type raft struct {
 
 	logger    *Logger
 	storage   storage.RaftStorage
-	requester RaftRequester
+	requester RaftSender
 
 	eventc chan raftEV
 	closed chan struct{}
@@ -93,7 +93,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	r.nextLogIndexes = map[string]uint64{}
 	r.clock = clock.New()
 	r.logger = NewRaftLogger(r.ID, DEBUG)
-	r.requester = NewRaftRequester(r.logger)
+	r.requester = NewRaftSender(r.logger)
 	r.eventc = make(chan raftEV)
 	r.closed = make(chan struct{})
 	return r, nil
@@ -140,12 +140,12 @@ func (r *raft) loopFollower() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
-				ev.replyc <- r.processAppendEntries(*msg)
+				ev.replyc <- r.processAppendEntries(msg)
 				electionTimer = r.newElectionTimer()
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVote(*msg)
+				ev.replyc <- r.processRequestVote(msg)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatus(*msg)
+				ev.replyc <- r.processShowStatus(msg)
 			default:
 				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
 			}
@@ -184,9 +184,9 @@ func (r *raft) loopCandidate() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVote(*msg)
+				ev.replyc <- r.processRequestVote(msg)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatus(*msg)
+				ev.replyc <- r.processShowStatus(msg)
 			default:
 				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
 			}
@@ -206,13 +206,13 @@ func (r *raft) loopLeader() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
-				ev.replyc <- r.processAppendEntries(*msg)
+				ev.replyc <- r.processAppendEntries(msg)
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVote(*msg)
+				ev.replyc <- r.processRequestVote(msg)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatus(*msg)
+				ev.replyc <- r.processShowStatus(msg)
 			case *CommandMessage:
-				ev.replyc <- r.processCommand(*msg)
+				ev.replyc <- r.processCommand(msg)
 			default:
 				ev.replyc <- newServerReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
 			}
@@ -220,16 +220,16 @@ func (r *raft) loopLeader() {
 	}
 }
 
-func (r *raft) processShowStatus(msg ShowStatusMessage) ShowStatusReply {
+func (r *raft) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 	b := ShowStatusReply{}
 	b.Term = r.storage.MustGetCurrentTerm()
 	b.CommitIndex = r.storage.MustGetCommitIndex()
 	b.Peers = r.peers
 	b.State = r.state
-	return b
+	return &b
 }
 
-func (r *raft) processAppendEntries(msg AppendEntriesMessage) AppendEntriesReply {
+func (r *raft) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
@@ -272,7 +272,7 @@ func (r *raft) processAppendEntries(msg AppendEntriesMessage) AppendEntriesReply
 	return newAppendEntriesReply(true, currentTerm, lastLogIndex, "success")
 }
 
-func (r *raft) processRequestVote(msg RequestVoteMessage) RequestVoteReply {
+func (r *raft) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	votedFor := r.storage.MustGetVotedFor()
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
@@ -304,23 +304,127 @@ func (r *raft) processRequestVote(msg RequestVoteMessage) RequestVoteReply {
 	return newRequestVoteReply(true, currentTerm, "cheers, granted")
 }
 
-func (r *raft) processCommand(req CommandMessage) CommandReply {
+func (r *raft) processCommand(req *CommandMessage) *CommandReply {
 	switch req.Command.OpType {
 	case kNop:
-		return CommandReply{Value: []byte{}, Message: "nop"}
+		return &CommandReply{Value: []byte{}, Message: "nop"}
 	case kPut:
 		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command})
 		// TODO: await logIndex got commit
-		return CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
+		return &CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 	case kGet:
 		v, exists := r.storage.MustGetKV(req.Command.Key)
 		if !exists {
-			return CommandReply{Value: nil, Message: "not found"}
+			return &CommandReply{Value: nil, Message: "not found"}
 		}
-		return CommandReply{Value: v, Message: "success"}
+		return &CommandReply{Value: v, Message: "success"}
 	default:
 		panic(fmt.Sprintf("unexpected opType: %s", req.Command.OpType))
 	}
+}
+
+func (r *raft) broadcastHeartbeats() error {
+	messages, err := r.buildAppendEntriesMessages(r.nextLogIndexes)
+	if err != nil {
+		return err
+	}
+
+	r.logger.Debugf("leader.broadcast-heartbeats messages=%v", messages)
+	for id, msg := range messages {
+		p := r.peers[id]
+		_, err := r.requester.SendAppendEntries(p, msg)
+
+		// TODO: 增加回退 nextLogIndex 逻辑
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
+func (r *raft) runElection() bool {
+	if r.state != CANDIDATE {
+		panic("should be candidate")
+	}
+
+	// increase candidate's term and vote for itself
+	currentTerm := r.storage.MustGetCurrentTerm()
+	r.storage.PutCurrentTerm(currentTerm + 1)
+	r.storage.PutVotedFor(r.ID)
+	r.logger.Debugf("raft.candidate.vote term=%d votedFor=%s", currentTerm, r.ID)
+
+	// send requestVote messages asynchronously, collect the vote results into grantedC
+	messages, err := r.buildRequestVoteMessages()
+	if err != nil {
+		r.logger.Debugf("raft.candidate.vote.buildRequestVoteMessages err=%s", err)
+		return false
+	}
+
+	peers := map[string]Peer{}
+	for id, p := range r.peers {
+		peers[id] = p
+	}
+
+	granted := 0
+	for id, msg := range messages {
+		p := peers[id]
+		resp, err := r.requester.SendRequestVote(p, msg)
+		r.logger.Debugf("raft.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
+		if err != nil {
+			continue
+		}
+		if resp.VoteGranted {
+			granted++
+		}
+	}
+
+	success := (granted+1)*2 > len(peers)+1
+	r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
+	return success
+}
+
+func (r *raft) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
+	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+	currentTerm := r.storage.MustGetCurrentTerm()
+
+	messages := map[string]*RequestVoteMessage{}
+	for id := range r.peers {
+		msg := RequestVoteMessage{}
+		msg.CandidateID = r.ID
+		msg.LastLogIndex = lastLogIndex
+		msg.LastLogTerm = lastLogTerm
+		msg.Term = currentTerm
+		messages[id] = &msg
+	}
+	return messages, nil
+}
+
+func (r *raft) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
+	messages := map[string]*AppendEntriesMessage{}
+	for id, idx := range nextLogIndexes {
+		msg := &AppendEntriesMessage{}
+		msg.LeaderID = r.ID
+		msg.LogEntries = []storage.RaftLogEntry{}
+		msg.Term = r.storage.MustGetCurrentTerm()
+		msg.CommitIndex = r.storage.MustGetCommitIndex()
+
+		if idx == 0 {
+			msg.PrevLogIndex = 0
+			msg.PrevLogTerm = 0
+		} else {
+			logEntries := r.storage.MustGetLogEntriesSince(idx - 1)
+			if len(logEntries) >= 1 {
+				msg.PrevLogIndex = logEntries[0].Index
+				msg.PrevLogTerm = logEntries[0].Term
+			}
+			if len(logEntries) >= 2 {
+				msg.LogEntries = logEntries[1:]
+			}
+		}
+		messages[id] = msg
+	}
+	return messages, nil
 }
 
 func (r *raft) resetLeader() {

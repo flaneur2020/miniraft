@@ -70,14 +70,14 @@ type CommandReply struct {
 	Value   []byte `json:"value,omitempty"`
 }
 
-func newRequestVoteReply(success bool, term uint64, message string) RequestVoteReply {
-	return RequestVoteReply{VoteGranted: success, Term: term, Message: message}
+func newRequestVoteReply(success bool, term uint64, message string) *RequestVoteReply {
+	return &RequestVoteReply{VoteGranted: success, Term: term, Message: message}
 }
 
-func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, message string) AppendEntriesReply {
-	return AppendEntriesReply{Success: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
+func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, message string) *AppendEntriesReply {
+	return &AppendEntriesReply{Success: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
 }
 
-func newServerReply(code int, message string) ServerReply {
-	return ServerReply{Code: code, Message: message}
+func newServerReply(code int, message string) *ServerReply {
+	return &ServerReply{Code: code, Message: message}
 }
