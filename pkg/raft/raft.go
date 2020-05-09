@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Fleurer/miniraft/pkg/storage"
-
+	"github.com/Fleurer/miniraft/pkg/util"
 	"github.com/facebookgo/clock"
 )
 
@@ -39,7 +39,7 @@ type raft struct {
 	electionTimeout   time.Duration
 	clock             clock.Clock
 
-	logger    *Logger
+	logger    *util.Logger
 	storage   storage.RaftStorage
 	requester RaftSender
 
@@ -92,7 +92,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	r.storage = s
 	r.nextLogIndexes = map[string]uint64{}
 	r.clock = clock.New()
-	r.logger = NewRaftLogger(r.ID, DEBUG)
+	r.logger = util.NewRaftLogger(r.ID, util.DEBUG)
 	r.requester = NewRaftSender(r.logger)
 	r.eventc = make(chan raftEV)
 	r.closed = make(chan struct{})
@@ -452,5 +452,5 @@ func (r *raft) become(s string) {
 }
 
 func (r *raft) newElectionTimer() *clock.Timer {
-	return NewTimerBetween(r.clock, r.electionTimeout, r.electionTimeout*2)
+	return util.NewTimerBetween(r.clock, r.electionTimeout, r.electionTimeout*2)
 }

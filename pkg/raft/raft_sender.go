@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/Fleurer/miniraft/pkg/util"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -15,10 +16,10 @@ type RaftSender interface {
 }
 
 type raftSender struct {
-	logger *Logger
+	logger *util.Logger
 }
 
-func NewRaftSender(logger *Logger) RaftSender {
+func NewRaftSender(logger *util.Logger) RaftSender {
 	return &raftSender{logger: logger}
 }
 
