@@ -10,20 +10,20 @@ import (
 	"time"
 )
 
-type RaftRpc interface {
+type RaftRPC interface {
 	RequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error)
 	AppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error)
 }
 
-type raftSender struct {
+type raftRPC struct {
 	logger *util.Logger
 }
 
-func NewRaftSender(logger *util.Logger) RaftRpc {
-	return &raftSender{logger: logger}
+func NewRaftRPC(logger *util.Logger) RaftRPC {
+	return &raftRPC{logger: logger}
 }
 
-func (rr *raftSender) AppendEntries(p Peer, request *AppendEntriesMessage) (*AppendEntriesReply, error) {
+func (rr *raftRPC) AppendEntries(p Peer, request *AppendEntriesMessage) (*AppendEntriesReply, error) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesReply{}
 	err := rr.post(p, url, request, &resp)
@@ -34,7 +34,7 @@ func (rr *raftSender) AppendEntries(p Peer, request *AppendEntriesMessage) (*App
 	return &resp, nil
 }
 
-func (rr *raftSender) RequestVote(p Peer, request *RequestVoteMessage) (*RequestVoteReply, error) {
+func (rr *raftRPC) RequestVote(p Peer, request *RequestVoteMessage) (*RequestVoteReply, error) {
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteReply{}
 	err := rr.post(p, url, request, &resp)
@@ -45,7 +45,7 @@ func (rr *raftSender) RequestVote(p Peer, request *RequestVoteMessage) (*Request
 	return &resp, nil
 }
 
-func (rr *raftSender) post(p Peer, url string, request interface{}, response interface{}) error {
+func (rr *raftRPC) post(p Peer, url string, request interface{}, response interface{}) error {
 	buf, err := json.Marshal(request)
 	if err != nil {
 		return err

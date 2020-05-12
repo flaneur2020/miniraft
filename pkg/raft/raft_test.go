@@ -25,13 +25,13 @@ func makeRaftInstances() (*raftNode, *raftNode, *raftNode, *clock.Mock) {
 	requester := &mockRaftRequester{map[string]*raftNode{"r1": raft1, "r2": raft2, "r3": raft3}}
 	clock := clock.NewMock()
 
-	raft1.requester = requester
+	raft1.rpc = requester
 	raft1.clock = clock
 
-	raft2.requester = requester
+	raft2.rpc = requester
 	raft2.clock = clock
 
-	raft3.requester = requester
+	raft3.rpc = requester
 	raft3.clock = clock
 
 	go raft1.Loop()
@@ -71,7 +71,7 @@ func Test_RaftRequest(t *testing.T) {
 	}()
 
 	req := &AppendEntriesMessage{}
-	resp, err := raft1.requester.AppendEntries(raft1.peers["r2"], req)
+	resp, err := raft1.rpc.AppendEntries(raft1.peers["r2"], req)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, resp, &AppendEntriesReply{Term: 0x0, Success: true, Message: "success", LastLogIndex: 0x0})
 
