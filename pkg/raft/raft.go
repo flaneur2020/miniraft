@@ -32,7 +32,12 @@ type raftNode struct {
 	state string
 	peers map[string]Peer
 
-	nextLogIndexes map[string]uint64
+	// volatile state on leaders
+	nextIndex map[string]uint64
+	matchIndex map[string]uint64
+
+	// Volatile state on all servers:
+	commitIndex uint64
 
 	heartbeatInterval time.Duration
 	electionTimeout   time.Duration
@@ -40,7 +45,7 @@ type raftNode struct {
 
 	logger    *util.Logger
 	storage   storage.RaftStorage
-	requester RaftSender
+	requester RaftRpc
 
 	eventc chan raftEV
 	closed chan struct{}
@@ -89,7 +94,7 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 	r.electionTimeout = 5 * time.Second
 	r.peers = peers
 	r.storage = s
-	r.nextLogIndexes = map[string]uint64{}
+	r.nextIndex = map[string]uint64{}
 	r.clock = clock.New()
 	r.logger = util.NewRaftLogger(r.ID, util.DEBUG)
 	r.requester = NewRaftSender(r.logger)
@@ -330,7 +335,7 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 }
 
 func (r *raftNode) broadcastHeartbeats() error {
-	messages, err := r.buildAppendEntriesMessages(r.nextLogIndexes)
+	messages, err := r.buildAppendEntriesMessages(r.nextIndex)
 	if err != nil {
 		return err
 	}
@@ -338,7 +343,7 @@ func (r *raftNode) broadcastHeartbeats() error {
 	r.logger.Debugf("leader.broadcast-heartbeats messages=%v", messages)
 	for id, msg := range messages {
 		p := r.peers[id]
-		_, err := r.requester.SendAppendEntries(p, msg)
+		_, err := r.requester.AppendEntries(p, msg)
 
 		// TODO: 增加回退 nextLogIndex 逻辑
 		if err != nil {
@@ -376,7 +381,7 @@ func (r *raftNode) runElection() bool {
 	for id, msg := range messages {
 		p := peers[id]
 
-		resp, err := r.requester.SendRequestVote(p, msg)
+		resp, err := r.requester.RequestVote(p, msg)
 		r.logger.Debugf("raftNode.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
 		if err != nil {
 			continue
@@ -438,7 +443,7 @@ func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) 
 func (r *raftNode) resetLeader() {
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 	for _, p := range r.peers {
-		r.nextLogIndexes[p.ID] = lastLogIndex
+		r.nextIndex[p.ID] = lastLogIndex
 	}
 }
 

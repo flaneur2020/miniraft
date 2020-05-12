@@ -10,20 +10,20 @@ import (
 	"time"
 )
 
-type RaftSender interface {
-	SendRequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error)
-	SendAppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error)
+type RaftRpc interface {
+	RequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error)
+	AppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error)
 }
 
 type raftSender struct {
 	logger *util.Logger
 }
 
-func NewRaftSender(logger *util.Logger) RaftSender {
+func NewRaftSender(logger *util.Logger) RaftRpc {
 	return &raftSender{logger: logger}
 }
 
-func (rr *raftSender) SendAppendEntries(p Peer, request *AppendEntriesMessage) (*AppendEntriesReply, error) {
+func (rr *raftSender) AppendEntries(p Peer, request *AppendEntriesMessage) (*AppendEntriesReply, error) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesReply{}
 	err := rr.post(p, url, request, &resp)
@@ -34,7 +34,7 @@ func (rr *raftSender) SendAppendEntries(p Peer, request *AppendEntriesMessage) (
 	return &resp, nil
 }
 
-func (rr *raftSender) SendRequestVote(p Peer, request *RequestVoteMessage) (*RequestVoteReply, error) {
+func (rr *raftSender) RequestVote(p Peer, request *RequestVoteMessage) (*RequestVoteReply, error) {
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteReply{}
 	err := rr.post(p, url, request, &resp)
@@ -75,7 +75,7 @@ type mockRaftRequester struct {
 	rafts map[string]*raftNode
 }
 
-func (r *mockRaftRequester) SendRequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error) {
+func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
 	raft.eventc <- ev
@@ -89,7 +89,7 @@ func (r *mockRaftRequester) SendRequestVote(p Peer, req *RequestVoteMessage) (*R
 	}
 }
 
-func (r *mockRaftRequester) SendAppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error) {
+func (r *mockRaftRequester) AppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
 	raft.eventc <- ev
