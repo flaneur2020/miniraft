@@ -9,20 +9,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makeRaftInstances() (*raft, *raft, *raft, *clock.Mock) {
-	os.RemoveAll("/tmp/raft-test/")
-	os.MkdirAll("/tmp/raft-test/", 0777)
+func makeRaftInstances() (*raftNode, *raftNode, *raftNode, *clock.Mock) {
+	os.RemoveAll("/tmp/raftNode-test/")
+	os.MkdirAll("/tmp/raftNode-test/", 0777)
 
 	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
-	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raft-test/r01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
-	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raft-test/r02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
-	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raft-test/r03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
+	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raftNode-test/r01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
+	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raftNode-test/r02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
+	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raftNode-test/r03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
 
 	raft1, _ := newRaft(opt1)
 	raft2, _ := newRaft(opt2)
 	raft3, _ := newRaft(opt3)
 
-	requester := &mockRaftRequester{map[string]*raft{"r1": raft1, "r2": raft2, "r3": raft3}}
+	requester := &mockRaftRequester{map[string]*raftNode{"r1": raft1, "r2": raft2, "r3": raft3}}
 	clock := clock.NewMock()
 
 	raft1.requester = requester
@@ -62,7 +62,7 @@ func Test_NewRaft(t *testing.T) {
 }
 
 func Test_RaftRequest(t *testing.T) {
-	// go test github.com/fleurer/miniraft/pkg/raft -run Test_RaftRequest  -v
+	// go test github.com/fleurer/miniraft/pkg/raftNode -run Test_RaftRequest  -v
 	raft1, raft2, raft3, clock := makeRaftInstances()
 	defer func() {
 		raft1.Shutdown()

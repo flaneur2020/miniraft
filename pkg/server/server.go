@@ -9,7 +9,7 @@ import (
 )
 
 type RaftServer struct {
-	r          raft.Raft
+	r          raft.RaftNode
 	listenAddr string
 	httpServer *http.Server
 }

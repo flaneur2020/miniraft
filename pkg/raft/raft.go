@@ -21,13 +21,13 @@ type Peer struct {
 	Addr string `json:"addr"`
 }
 
-type Raft interface {
+type RaftNode interface {
 	Loop()
-	Process(msg RaftMessage) (interface{}, error)
+	Process(msg RaftMessage) (RaftReply, error)
 	Shutdown()
 }
 
-type raft struct {
+type raftNode struct {
 	ID    string
 	state string
 	peers map[string]Peer
@@ -63,11 +63,11 @@ func newRaftEV(msg RaftMessage) raftEV {
 	return raftEV{msg, make(chan RaftReply, 1)}
 }
 
-func NewRaft(opt *RaftOptions) (Raft, error) {
+func NewRaft(opt *RaftOptions) (RaftNode, error) {
 	return newRaft(opt)
 }
 
-func newRaft(opt *RaftOptions) (*raft, error) {
+func newRaft(opt *RaftOptions) (*raftNode, error) {
 	peers := map[string]Peer{}
 	for id, addr := range opt.InitialPeers {
 		if id == opt.ID {
@@ -82,7 +82,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 		return nil, err
 	}
 
-	r := &raft{}
+	r := &raftNode{}
 	r.ID = opt.ID
 	r.state = FOLLOWER
 	r.heartbeatInterval = 100 * time.Millisecond
@@ -98,7 +98,7 @@ func newRaft(opt *RaftOptions) (*raft, error) {
 	return r, nil
 }
 
-func (r *raft) Process(msg RaftMessage) (interface{}, error) {
+func (r *raftNode) Process(msg RaftMessage) (RaftReply, error) {
 	ev := newRaftEV(msg)
 	r.eventc <- ev
 	reply := <-ev.replyc
@@ -106,8 +106,8 @@ func (r *raft) Process(msg RaftMessage) (interface{}, error) {
 	return reply, nil
 }
 
-func (r *raft) Loop() {
-	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
+func (r *raftNode) Loop() {
+	r.logger.Infof("raftNode.loop.start: peers=%v", r.peers)
 	for {
 		switch r.state {
 		case FOLLOWER:
@@ -117,21 +117,24 @@ func (r *raft) Loop() {
 		case CANDIDATE:
 			r.loopCandidate()
 		case CLOSED:
-			r.logger.Infof("raft.loop.closed")
+			r.logger.Infof("raftNode.loop.closed")
 			break
 		}
 	}
 }
 
-func (r *raft) loopFollower() {
+func (r *raftNode) loopFollower() {
 	electionTimer := r.newElectionTimer()
+
 	for r.state == FOLLOWER {
 		select {
 		case <-electionTimer.C:
 			r.logger.Infof("follower.loop.electionTimeout")
 			r.become(CANDIDATE)
+
 		case <-r.closed:
 			r.closeRaft()
+
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
@@ -152,7 +155,7 @@ func (r *raft) loopFollower() {
 // 它自己赢得选举；
 // 另一台机器宣称自己赢得选举；
 // 一段时间过后没有赢家
-func (r *raft) loopCandidate() {
+func (r *raftNode) loopCandidate() {
 	electionResultC := make(chan bool)
 	electionTimer := r.newElectionTimer()
 	go func() {
@@ -189,15 +192,18 @@ func (r *raft) loopCandidate() {
 	}
 }
 
-func (r *raft) loopLeader() {
+func (r *raftNode) loopLeader() {
 	r.resetLeader()
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
+
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
 			r.closeRaft()
+
 		case <-heartbeatTicker.C:
 			r.broadcastHeartbeats()
+
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
@@ -215,7 +221,7 @@ func (r *raft) loopLeader() {
 	}
 }
 
-func (r *raft) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
+func (r *raftNode) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 	b := ShowStatusReply{}
 	b.Term = r.storage.MustGetCurrentTerm()
 	b.CommitIndex = r.storage.MustGetCommitIndex()
@@ -224,11 +230,11 @@ func (r *raft) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 	return &b
 }
 
-func (r *raft) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
+func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
-	// r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, currentTerm, lastLogIndex)
+	// r.logger.Debugf("raftNode.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, currentTerm, lastLogIndex)
 
 	if msg.Term < currentTerm {
 		return newAppendEntriesReply(false, currentTerm, lastLogIndex, "msg.Term < currentTerm")
@@ -238,6 +244,7 @@ func (r *raft) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesRep
 		if r.state == LEADER {
 			return newAppendEntriesReply(false, currentTerm, lastLogIndex, "i'm leader")
 		}
+
 		if r.state == CANDIDATE {
 			// while waiting for votes, a candidate may receive an AppendEntries RPC from another server claiming to be leader
 			// if the leader's term is at least as large as the candidate's current term, then the candidate recognizes the leader
@@ -267,12 +274,12 @@ func (r *raft) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesRep
 	return newAppendEntriesReply(true, currentTerm, lastLogIndex, "success")
 }
 
-func (r *raft) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
+func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	votedFor := r.storage.MustGetVotedFor()
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 
-	r.logger.Debugf("raft.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, currentTerm, votedFor, lastLogIndex, lastLogTerm)
+	r.logger.Debugf("raftNode.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, currentTerm, votedFor, lastLogIndex, lastLogTerm)
 	// if the caller's term smaller than mine, refuse
 	if msg.Term < currentTerm {
 		return newRequestVoteReply(false, currentTerm, fmt.Sprintf("msg.term: %d < curremtTerm: %d", msg.Term, currentTerm))
@@ -299,26 +306,30 @@ func (r *raft) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
 	return newRequestVoteReply(true, currentTerm, "cheers, granted")
 }
 
-func (r *raft) processCommand(req *CommandMessage) *CommandReply {
+func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 	switch req.Command.OpType {
 	case kNop:
 		return &CommandReply{Value: []byte{}, Message: "nop"}
+
 	case kPut:
 		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command})
 		// TODO: await logIndex got commit
 		return &CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
+
 	case kGet:
 		v, exists := r.storage.MustGetKV(req.Command.Key)
 		if !exists {
 			return &CommandReply{Value: nil, Message: "not found"}
 		}
 		return &CommandReply{Value: v, Message: "success"}
+
 	default:
 		panic(fmt.Sprintf("unexpected opType: %s", req.Command.OpType))
+
 	}
 }
 
-func (r *raft) broadcastHeartbeats() error {
+func (r *raftNode) broadcastHeartbeats() error {
 	messages, err := r.buildAppendEntriesMessages(r.nextLogIndexes)
 	if err != nil {
 		return err
@@ -338,7 +349,7 @@ func (r *raft) broadcastHeartbeats() error {
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *raft) runElection() bool {
+func (r *raftNode) runElection() bool {
 	if r.state != CANDIDATE {
 		panic("should be candidate")
 	}
@@ -347,12 +358,12 @@ func (r *raft) runElection() bool {
 	currentTerm := r.storage.MustGetCurrentTerm()
 	r.storage.PutCurrentTerm(currentTerm + 1)
 	r.storage.PutVotedFor(r.ID)
-	r.logger.Debugf("raft.candidate.vote term=%d votedFor=%s", currentTerm, r.ID)
+	r.logger.Debugf("raftNode.candidate.vote term=%d votedFor=%s", currentTerm, r.ID)
 
 	// send requestVote messages asynchronously, collect the vote results into grantedC
 	messages, err := r.buildRequestVoteMessages()
 	if err != nil {
-		r.logger.Debugf("raft.candidate.vote.buildRequestVoteMessages err=%s", err)
+		r.logger.Debugf("raftNode.candidate.vote.buildRequestVoteMessages err=%s", err)
 		return false
 	}
 
@@ -364,22 +375,24 @@ func (r *raft) runElection() bool {
 	granted := 0
 	for id, msg := range messages {
 		p := peers[id]
+
 		resp, err := r.requester.SendRequestVote(p, msg)
-		r.logger.Debugf("raft.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
+		r.logger.Debugf("raftNode.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
 		if err != nil {
 			continue
 		}
+
 		if resp.VoteGranted {
 			granted++
 		}
 	}
 
 	success := (granted+1)*2 > len(peers)+1
-	r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
+	r.logger.Debugf("raftNode.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
 	return success
 }
 
-func (r *raft) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
+func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 	currentTerm := r.storage.MustGetCurrentTerm()
 
@@ -395,7 +408,7 @@ func (r *raft) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error
 	return messages, nil
 }
 
-func (r *raft) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
+func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
 	messages := map[string]*AppendEntriesMessage{}
 	for id, idx := range nextLogIndexes {
 		msg := &AppendEntriesMessage{}
@@ -422,30 +435,30 @@ func (r *raft) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map
 	return messages, nil
 }
 
-func (r *raft) resetLeader() {
+func (r *raftNode) resetLeader() {
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 	for _, p := range r.peers {
 		r.nextLogIndexes[p.ID] = lastLogIndex
 	}
 }
 
-func (r *raft) Shutdown() {
-	r.logger.Debugf("raft.shutdown")
+func (r *raftNode) Shutdown() {
+	r.logger.Debugf("raftNode.shutdown")
 	close(r.closed)
 }
 
-func (r *raft) closeRaft() {
-	r.logger.Infof("raft.close-raft")
+func (r *raftNode) closeRaft() {
+	r.logger.Infof("raftNode.close-raftNode")
 	r.state = CLOSED
 	r.storage.Close()
 	close(r.eventc)
 }
 
-func (r *raft) become(s string) {
-	r.logger.Debugf("raft.set-state state=%s", s)
+func (r *raftNode) become(s string) {
+	r.logger.Debugf("raftNode.set-state state=%s", s)
 	r.state = s
 }
 
-func (r *raft) newElectionTimer() *clock.Timer {
+func (r *raftNode) newElectionTimer() *clock.Timer {
 	return util.NewTimerBetween(r.clock, r.electionTimeout, r.electionTimeout*2)
 }

@@ -27,7 +27,7 @@ func (rr *raftSender) SendAppendEntries(p Peer, request *AppendEntriesMessage) (
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesReply{}
 	err := rr.post(p, url, request, &resp)
-	// rr.logger.Debugf("raft.request.send-append-entries to=%s msg=%#v err=%s", p.ID, request, err)
+	// rr.logger.Debugf("raftNode.request.send-append-entries to=%s msg=%#v err=%s", p.ID, request, err)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (rr *raftSender) SendRequestVote(p Peer, request *RequestVoteMessage) (*Req
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteReply{}
 	err := rr.post(p, url, request, &resp)
-	rr.logger.Debugf("raft.request.send-request vote to=%s msg=%#v err=%s", p.ID, request, err)
+	rr.logger.Debugf("raftNode.request.send-request vote to=%s msg=%#v err=%s", p.ID, request, err)
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (rr *raftSender) post(p Peer, url string, request interface{}, response int
 }
 
 type mockRaftRequester struct {
-	rafts map[string]*raft
+	rafts map[string]*raftNode
 }
 
 func (r *mockRaftRequester) SendRequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error) {
