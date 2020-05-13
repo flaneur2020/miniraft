@@ -301,7 +301,7 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 
-	r.logger.Debugf("raftNode.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, r.currentTerm, votedFor, lastLogIndex, lastLogTerm)
+	r.logger.Debugf("raftNode.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, r.currentTerm, r.votedFor, lastLogIndex, lastLogTerm)
 	// if the caller's term smaller than mine, refuse
 	if msg.Term < r.currentTerm {
 		return newRequestVoteReply(false, r.currentTerm, fmt.Sprintf("msg.term: %d < curremtTerm: %d", msg.Term, r.currentTerm))
@@ -336,7 +336,7 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 		return &CommandReply{Value: []byte{}, Message: "nop"}
 
 	case kPut:
-		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command})
+		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command}, r.currentTerm)
 		// TODO: await logIndex got commit
 		return &CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 
@@ -480,19 +480,23 @@ func (r *raftNode) closeRaft() {
 
 func (r *raftNode) become(s string) {
 	r.logger.Debugf("raftNode.set-state state=%s", s)
+	// TODO: atomic
 	r.state = s
 }
 
 func (r *raftNode) mustPersistState() {
-	r.storage.PutCurrentTerm(r.currentTerm)
-	r.storage.PutVotedFor(r.votedFor)
-	r.storage.PutLastApplied(r.lastApplied)
+	r.storage.MustPutMetaState(storage.RaftMetaState{
+		VotedFor: r.votedFor,
+		CurrentTerm: r.currentTerm,
+		LastApplied: r.lastApplied,
+	})
 }
 
 func (r *raftNode) mustLoadState() {
-	r.currentTerm = r.storage.MustGetCurrentTerm()
-	r.votedFor = r.storage.MustGetVotedFor()
-	r.lastApplied = r.storage.MustGetLastApplied()
+	m := r.storage.MustGetMetaState()
+	r.currentTerm = m.CurrentTerm
+	r.votedFor = m.VotedFor
+	r.lastApplied = m.LastApplied
 }
 
 func (r *raftNode) newElectionTimer() *clock.Timer {

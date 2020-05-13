@@ -11,10 +11,7 @@ import (
 )
 
 const (
-	kCurrentTerm = "m:current-term"
-	kVotedFor    = "m:voted-for"
-	kCommitIndex = "m:commit-index"
-	kLastApplied = "m:last-applied"
+	kMeta = "m:meta"
 	kLogEntries  = "l:log-entries"
 )
 
@@ -30,24 +27,24 @@ type RaftCommand struct {
 	Value  []byte `json:"value,omitempty"`
 }
 
+type RaftMetaState struct {
+	LastApplied uint64 `json:"lastApplied"`
+	VotedFor 	string `json:"votedFor"`
+	CurrentTerm uint64 `json:"currentTerm"`
+}
+
 type RaftStorage interface {
 	MustGetKV([]byte) ([]byte, bool)
 	MustPutKV([]byte, []byte)
 	MustDeleteKV([]byte)
 
-	MustGetCurrentTerm() uint64
-	MustGetCommitIndex() uint64
-	MustGetLastApplied() uint64
-	MustGetVotedFor() string
+	MustGetMetaState() RaftMetaState
+	MustPutMetaState(s RaftMetaState)
+
+	AppendLogEntries(entries []RaftLogEntry) error
+	AppendLogEntriesByCommands(commands []RaftCommand, term uint64) (uint64, error)
 	MustGetLastLogIndexAndTerm() (uint64, uint64)
 	MustGetLogEntriesSince(index uint64) []RaftLogEntry
-
-	PutCurrentTerm(uint64) error
-	PutLastApplied(uint64) error
-	PutCommitIndex(uint64) error
-	PutVotedFor(string) error
-	AppendLogEntries(entries []RaftLogEntry) error
-	AppendLogEntriesByCommands(commands []RaftCommand) (uint64, error)
 	TruncateSince(index uint64)
 
 	Reset()
@@ -76,9 +73,34 @@ func NewRaftStorage(path string, keyPrefix string) (RaftStorage, error) {
 }
 
 func (s *raftStorage) Reset() {
-	s.PutCommitIndex(0)
-	s.PutCurrentTerm(0)
-	s.PutLastApplied(0)
+	s.MustPutMetaState(RaftMetaState{
+		LastApplied: 0,
+		VotedFor: "",
+		CurrentTerm: 0,
+	})
+}
+
+func (s *raftStorage) MustPutMetaState(m RaftMetaState) {
+	buf, err := json.Marshal(m)
+	if err != nil {
+		panic("marshal failed")
+	}
+	s.dbPutString([]byte(kMeta), string(buf))
+}
+
+func (s *raftStorage) MustGetMetaState() RaftMetaState {
+	m := RaftMetaState{}
+	str, err := s.dbGetString([]byte(kMeta))
+	if err == lerrors.ErrNotFound {
+		return m
+	} else if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal([]byte(str), &m)
+	if err != nil {
+		panic("unmarshal failed")
+	}
+	return m
 }
 
 func (s *raftStorage) Close() {
@@ -112,62 +134,6 @@ func (s *raftStorage) MustDeleteKV(key []byte) {
 	}
 }
 
-func (s *raftStorage) MustGetCurrentTerm() uint64 {
-	term, err := s.dbGetUint64([]byte(kCurrentTerm))
-	if err == lerrors.ErrNotFound {
-		return 0
-	} else if err != nil {
-		panic(err)
-	}
-	return term
-}
-
-func (s *raftStorage) PutCurrentTerm(v uint64) error {
-	return s.dbPutUint64([]byte(kCurrentTerm), v)
-}
-
-func (s *raftStorage) MustGetCommitIndex() uint64 {
-	r, err := s.dbGetUint64([]byte(kCommitIndex))
-	if err == lerrors.ErrNotFound {
-		return 0
-	} else if err != nil {
-		panic(err)
-	}
-	return r
-}
-
-func (s *raftStorage) PutCommitIndex(v uint64) error {
-	return s.dbPutUint64([]byte(kCommitIndex), v)
-}
-
-func (s *raftStorage) MustGetLastApplied() uint64 {
-	r, err := s.dbGetUint64([]byte(kLastApplied))
-	if err == lerrors.ErrNotFound {
-		return 0
-	} else if err != nil {
-		panic(err)
-	}
-	return r
-}
-
-func (s *raftStorage) PutLastApplied(v uint64) error {
-	return s.dbPutUint64([]byte(kLastApplied), v)
-}
-
-func (s *raftStorage) MustGetVotedFor() string {
-	v, err := s.dbGetString([]byte(kVotedFor))
-	if err == lerrors.ErrNotFound {
-		return ""
-	} else if err != nil {
-		panic(err)
-	}
-	return v
-}
-
-func (s *raftStorage) PutVotedFor(v string) error {
-	return s.dbPutString([]byte(kVotedFor), v)
-}
-
 func (s *raftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	batch := new(leveldb.Batch)
 	for _, le := range entries {
@@ -182,9 +148,8 @@ func (s *raftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	return nil
 }
 
-func (s *raftStorage) AppendLogEntriesByCommands(commands []RaftCommand) (uint64, error) {
+func (s *raftStorage) AppendLogEntriesByCommands(commands []RaftCommand, term uint64) (uint64, error) {
 	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
-	term := s.MustGetCurrentTerm()
 	es := []RaftLogEntry{}
 	for _, cmd := range commands {
 		le := RaftLogEntry{
@@ -263,23 +228,6 @@ func (s *raftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
 		panic(err)
 	}
 	return le.Index, le.Term
-}
-
-func (s *raftStorage) dbGetUint64(k []byte) (uint64, error) {
-	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
-	buf, err := s.db.Get(key, nil)
-	if err != nil {
-		return 0, err
-	}
-	n := binary.LittleEndian.Uint64(buf)
-	return n, nil
-}
-
-func (s *raftStorage) dbPutUint64(k []byte, v uint64) error {
-	key := []byte(fmt.Sprintf("%s:%s", s.keyPrefix, k))
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, v)
-	return s.db.Put(key, buf, nil)
 }
 
 func (s *raftStorage) dbGetString(k []byte) (string, error) {
