@@ -42,6 +42,7 @@ func (m *AppendEntriesMessage) MessageKind() string {
 }
 
 type AppendEntriesReply struct {
+	PeerID 		 string `json:"peerID"`
 	Term         uint64 `json:"term"`
 	Success      bool   `json:"success"`
 	Message      string `json:"message"`
@@ -121,8 +122,8 @@ func newRequestVoteReply(success bool, term uint64, message string) *RequestVote
 	return &RequestVoteReply{VoteGranted: success, Term: term, Message: message}
 }
 
-func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, message string) *AppendEntriesReply {
-	return &AppendEntriesReply{Success: success, Term: term, LastLogIndex: lastLogIndex, Message: message}
+func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, peerID string, message string) *AppendEntriesReply {
+	return &AppendEntriesReply{Success: success, Term: term, LastLogIndex: lastLogIndex, PeerID: peerID, Message: message}
 }
 
 func newMessageReply(code int, message string) *MessageReply {

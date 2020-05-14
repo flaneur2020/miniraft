@@ -33,7 +33,7 @@ type raftNode struct {
 	peers map[string]Peer
 
 	// volatile state on leaders
-	nextIndex map[string]uint64
+	nextIndex  map[string]uint64
 	matchIndex map[string]uint64
 
 	// volatile state on all servers
@@ -180,11 +180,9 @@ func (r *raftNode) loopFollower() {
 // 另一台机器宣称自己赢得选举；
 // 一段时间过后没有赢家
 func (r *raftNode) loopCandidate() {
-	electionResultC := make(chan bool)
+	grantedC := make(chan bool)
 	electionTimer := r.newElectionTimer()
-	go func() {
-		electionResultC <- r.runElection()
-	}()
+	r.runElection(grantedC)
 
 	for r.state == CANDIDATE {
 		select {
@@ -192,12 +190,10 @@ func (r *raftNode) loopCandidate() {
 			r.closeRaft()
 
 		case <-electionTimer.C:
-			go func() {
-				electionResultC <- r.runElection()
-			}()
+			r.runElection(grantedC)
 			electionTimer = r.newElectionTimer()
 
-		case ok := <-electionResultC:
+		case ok := <-grantedC:
 			if ok {
 				r.become(LEADER)
 				continue
@@ -229,7 +225,7 @@ func (r *raftNode) loopLeader() {
 		case <-heartbeatTicker.C:
 			r.broadcastAppendEntries(replyC)
 
-		case reply := <- replyC:
+		case reply := <-replyC:
 			r.processAppendEntriesReply(reply)
 
 		case ev := <-r.eventc:
@@ -264,12 +260,12 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	// r.logger.Debugf("raftNode.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, currentTerm, lastLogIndex)
 
 	if msg.Term < r.currentTerm {
-		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, "msg.Term < r.currentTerm")
+		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "msg.Term < r.currentTerm")
 	}
 
 	if msg.Term == r.currentTerm {
 		if r.state == LEADER {
-			return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, "i'm leader")
+			return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "i'm leader")
 		}
 
 		if r.state == CANDIDATE {
@@ -288,7 +284,7 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	}
 
 	if msg.PrevLogIndex > lastLogIndex {
-		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, "log not match")
+		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "log not match")
 	}
 
 	if msg.PrevLogIndex < lastLogIndex {
@@ -299,7 +295,7 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	r.commitIndex = msg.CommitIndex
 
 	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
-	return newAppendEntriesReply(true, r.currentTerm, lastLogIndex, "success")
+	return newAppendEntriesReply(true, r.currentTerm, lastLogIndex, r.ID, "success")
 }
 
 func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
@@ -383,18 +379,18 @@ func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
 		// if the receiver has got higher term than myself, turn myself into follower
 		r.become(FOLLOWER)
 	} else if reply.Success {
-		r.nextIndex[p.ID] = reply.LastLogIndex + 1
-		r.matchIndex[p.ID] = reply.LastLogIndex
+		r.nextIndex[reply.PeerID] = reply.LastLogIndex + 1
+		r.matchIndex[reply.PeerID] = reply.LastLogIndex
 		// TODO: 计算 commitIndex
 	} else if !reply.Success {
-		if r.nextIndex[p.ID] > 0 {
-			r.nextIndex[p.ID]--
+		if r.nextIndex[reply.PeerID] > 0 {
+			r.nextIndex[reply.PeerID]--
 		}
 	}
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *raftNode) runElection() bool {
+func (r *raftNode) runElection(cb chan bool) {
 	if r.state != CANDIDATE {
 		panic("should be candidate")
 	}
@@ -409,32 +405,36 @@ func (r *raftNode) runElection() bool {
 	messages, err := r.buildRequestVoteMessages()
 	if err != nil {
 		r.logger.Debugf("raftNode.candidate.vote.buildRequestVoteMessages err=%s", err)
-		return false
+		return
 	}
 
-	peers := map[string]Peer{}
-	for id, p := range r.peers {
-		peers[id] = p
-	}
-
-	granted := 0
+	replyC := make(chan *RequestVoteReply, len(messages))
 	for id, msg := range messages {
-		p := peers[id]
+		p := r.peers[id]
 
-		resp, err := r.rpc.RequestVote(p, msg)
-		r.logger.Debugf("raftNode.candidate.send-request-vote target=%s resp=%#v err=%s", id, resp, err)
-		if err != nil {
-			continue
-		}
-
-		if resp.VoteGranted {
-			granted++
-		}
+		go func(p Peer, msg *RequestVoteMessage) {
+			reply, err := r.rpc.RequestVote(p, msg)
+			r.logger.Debugf("raftNode.candidate.send-request-vote target=%s resp=%#v err=%s", id, reply, err)
+			replyC <- reply
+		}(p, msg)
 	}
 
-	success := (granted+1)*2 > len(peers)+1
-	r.logger.Debugf("raftNode.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
-	return success
+	go func() {
+		granted := 0
+		for range messages {
+			reply := <-replyC
+			if reply != nil && reply.VoteGranted {
+				granted++
+			}
+		}
+
+		success := (granted+1)*2 > len(r.peers)+1
+		r.logger.Debugf("raftNode.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
+
+		if success {
+			cb <- success
+		}
+	}()
 }
 
 func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
@@ -508,7 +508,7 @@ func (r *raftNode) become(s string) {
 
 func (r *raftNode) mustPersistState() {
 	r.storage.MustPutMetaState(storage.RaftMetaState{
-		VotedFor: r.votedFor,
+		VotedFor:    r.votedFor,
 		CurrentTerm: r.currentTerm,
 		LastApplied: r.lastApplied,
 	})
