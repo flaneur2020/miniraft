@@ -219,6 +219,7 @@ func (r *raftNode) loopCandidate() {
 func (r *raftNode) loopLeader() {
 	r.resetLeader()
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
+	replyC := make(chan *AppendEntriesReply)
 
 	for r.state == LEADER {
 		select {
@@ -226,7 +227,10 @@ func (r *raftNode) loopLeader() {
 			r.closeRaft()
 
 		case <-heartbeatTicker.C:
-			r.broadcastHeartbeats()
+			r.broadcastAppendEntries(replyC)
+
+		case reply := <- replyC:
+			r.processAppendEntriesReply(reply)
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
@@ -353,23 +357,40 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 	}
 }
 
-func (r *raftNode) broadcastHeartbeats() error {
+func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 	messages, err := r.buildAppendEntriesMessages(r.nextIndex)
 	if err != nil {
-		return err
+		return
 	}
 
 	r.logger.Debugf("leader.broadcast-heartbeats messages=%v", messages)
 	for id, msg := range messages {
 		p := r.peers[id]
-		_, err := r.rpc.AppendEntries(p, msg)
 
-		// TODO: 增加回退 nextLogIndex 逻辑
-		if err != nil {
-			return err
+		go func(msg *AppendEntriesMessage) {
+			reply, err := r.rpc.AppendEntries(p, msg)
+			if err != nil {
+				return
+			}
+			cb <- reply
+		}(msg)
+	}
+}
+
+func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
+	// TODO:
+	if reply.Term > r.currentTerm {
+		// if the receiver has got higher term than myself, turn myself into follower
+		r.become(FOLLOWER)
+	} else if reply.Success {
+		r.nextIndex[p.ID] = reply.LastLogIndex + 1
+		r.matchIndex[p.ID] = reply.LastLogIndex
+		// TODO: 计算 commitIndex
+	} else if !reply.Success {
+		if r.nextIndex[p.ID] > 0 {
+			r.nextIndex[p.ID]--
 		}
 	}
-	return nil
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
@@ -463,6 +484,7 @@ func (r *raftNode) resetLeader() {
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 	for _, p := range r.peers {
 		r.nextIndex[p.ID] = lastLogIndex
+		r.matchIndex[p.ID] = 0
 	}
 }
 
