@@ -83,3 +83,21 @@ func Test_RaftRequest(t *testing.T) {
 
 	time.Sleep(30)
 }
+
+func Test_calculateLeaderCommitIndex(t *testing.T) {
+	dt := []struct {
+		m    map[string]uint64
+		want uint64
+	}{
+		{map[string]uint64{"n1": 1, "n2": 1, "n3": 2}, 1},
+		{map[string]uint64{"n1": 2, "n2": 1, "n3": 2}, 2},
+		{map[string]uint64{"n1": 1, "n2": 1, "n3": 2, "n4": 2}, 1},
+		{map[string]uint64{"n1": 1, "n2": 1, "n3": 2, "n4": 3}, 1},
+		{map[string]uint64{"n1": 1, "n2": 1, "n3": 2, "n4": 2, "n5": 2}, 2},
+	}
+
+	for _, d := range dt {
+		got := calculateLeaderCommitIndex(d.m)
+		assert.Equal(t, got, d.want)
+	}
+}

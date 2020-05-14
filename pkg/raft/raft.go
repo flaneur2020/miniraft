@@ -2,6 +2,7 @@ package raft
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/Fleurer/miniraft/pkg/storage"
@@ -381,7 +382,7 @@ func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
 	} else if reply.Success {
 		r.nextIndex[reply.PeerID] = reply.LastLogIndex + 1
 		r.matchIndex[reply.PeerID] = reply.LastLogIndex
-		// TODO: 计算 commitIndex
+		r.commitIndex = calculateLeaderCommitIndex(r.matchIndex)
 	} else if !reply.Success {
 		if r.nextIndex[reply.PeerID] > 0 {
 			r.nextIndex[reply.PeerID]--
@@ -523,4 +524,13 @@ func (r *raftNode) mustLoadState() {
 
 func (r *raftNode) newElectionTimer() *clock.Timer {
 	return util.NewTimerBetween(r.clock, r.electionTimeout, r.electionTimeout*2)
+}
+
+func calculateLeaderCommitIndex(matchIndex map[string]uint64) uint64 {
+	indices := []uint64{}
+	for _, idx := range matchIndex {
+		indices = append(indices, idx)
+	}
+	sort.Slice(indices, func(i, j int) bool { return indices[i] >= indices[j] })
+	return indices[len(indices)/2]
 }
