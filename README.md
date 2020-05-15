@@ -7,9 +7,9 @@ todo
 - [x] 简化 storage 对象, 干掉 storage 中的 commitIndex
 - [x] 异步 runElection
 - [x] 计算 commitIndex
-- [ ] appendEntriesReply 处理
-- [ ] 确认 requestVote 和 appendEntries 逻辑
+- [x] appendEntriesReply 处理
 - [ ] apply 逻辑
+- [ ] 确认 requestVote 和 appendEntries 逻辑
 - [ ] lock
 
 references

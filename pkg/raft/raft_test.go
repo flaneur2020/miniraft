@@ -14,9 +14,30 @@ func makeRaftInstances() (*raftNode, *raftNode, *raftNode, *clock.Mock) {
 	os.MkdirAll("/tmp/raftNode-test/", 0777)
 
 	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
-	opt1 := &RaftOptions{ID: "r1", StoragePath: "/tmp/raftNode-test/r01", ListenAddr: "0.0.0.0:4501", PeerAddr: "192.168.0.1:4501", InitialPeers: initialPeers}
-	opt2 := &RaftOptions{ID: "r2", StoragePath: "/tmp/raftNode-test/r02", ListenAddr: "0.0.0.0:4502", PeerAddr: "192.168.0.1:4502", InitialPeers: initialPeers}
-	opt3 := &RaftOptions{ID: "r3", StoragePath: "/tmp/raftNode-test/r03", ListenAddr: "0.0.0.0:4503", PeerAddr: "192.168.0.1:4503", InitialPeers: initialPeers}
+	opt1 := &RaftOptions{
+		ID:                "r1",
+		StoragePath:       "/tmp/raftNode-test/r01",
+		ListenAddr:        "0.0.0.0:4501",
+		PeerAddr:          "192.168.0.1:4501",
+		InitialPeers:      initialPeers,
+		ElectionTimeoutMs: 5000,
+	}
+	opt2 := &RaftOptions{
+		ID:                "r2",
+		StoragePath:       "/tmp/raftNode-test/r02",
+		ListenAddr:        "0.0.0.0:4502",
+		PeerAddr:          "192.168.0.1:4502",
+		InitialPeers:      initialPeers,
+		ElectionTimeoutMs: 5000,
+	}
+	opt3 := &RaftOptions{
+		ID:                "r3",
+		StoragePath:       "/tmp/raftNode-test/r03",
+		ListenAddr:        "0.0.0.0:4503",
+		PeerAddr:          "192.168.0.1:4503",
+		InitialPeers:      initialPeers,
+		ElectionTimeoutMs: 5000,
+	}
 
 	raft1, _ := newRaft(opt1)
 	raft2, _ := newRaft(opt2)
@@ -71,17 +92,21 @@ func Test_RaftRequest(t *testing.T) {
 	}()
 
 	req := &AppendEntriesMessage{}
-	resp, err := raft1.rpc.AppendEntries(raft1.peers["r2"], req)
+	reply, err := raft1.rpc.AppendEntries(raft1.peers["r2"], req)
 	assert.Equal(t, err, nil)
-	assert.Equal(t, resp, &AppendEntriesReply{Term: 0x0, Success: true, Message: "success", LastLogIndex: 0x0})
+	assert.Equal(t, reply, &AppendEntriesReply{Term: 0x0, Success: true, PeerID: "r2", Message: "success", LastLogIndex: 0x0})
 
 	assert.Equal(t, raft1.state, FOLLOWER)
 	assert.Equal(t, raft2.state, FOLLOWER)
 	assert.Equal(t, raft3.state, FOLLOWER)
 
 	clock.Add(5 * time.Second)
+	clock.Add(5 * time.Second)
+	clock.Add(5 * time.Second)
 
-	time.Sleep(30)
+	assert.Equal(t, raft1.state, FOLLOWER)
+	assert.Equal(t, raft2.state, FOLLOWER)
+	assert.Equal(t, raft3.state, FOLLOWER)
 }
 
 func Test_calculateLeaderCommitIndex(t *testing.T) {
