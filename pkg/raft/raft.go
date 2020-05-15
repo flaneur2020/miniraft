@@ -218,6 +218,9 @@ func (r *raftNode) loopLeader() {
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
 	replyC := make(chan *AppendEntriesReply)
 
+	// a leader should append a nop log entry immediately
+	r.storage.AppendLogEntryByCommand(storage.NOPCommand, r.currentTerm)
+
 	for r.state == LEADER {
 		select {
 		case <-r.closed:
@@ -227,10 +230,6 @@ func (r *raftNode) loopLeader() {
 			r.broadcastAppendEntries(replyC)
 
 		case reply := <-replyC:
-			if reply.Term > r.currentTerm {
-				// if the receiver has got higher term than myself, turn myself into follower
-				r.become(FOLLOWER)
-			}
 			r.processAppendEntriesReply(reply)
 
 		case ev := <-r.eventc:
@@ -297,10 +296,11 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	}
 
 	r.storage.AppendLogEntries(msg.LogEntries)
-	r.commitIndex = msg.CommitIndex
+	lastLogIndex += uint64(len(msg.LogEntries))
 
-	// TODO: just lastLogIndex += len(msg.logEntries)
-	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
+	r.commitIndex = msg.CommitIndex
+	r.applyLogs()
+
 	return newAppendEntriesReply(true, r.currentTerm, lastLogIndex, r.ID, "success")
 }
 
@@ -342,7 +342,7 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 		return &CommandReply{Value: []byte{}, Message: "nop"}
 
 	case kPut:
-		logIndex, _ := r.storage.AppendLogEntriesByCommands([]storage.RaftCommand{req.Command}, r.currentTerm)
+		logIndex, _ := r.storage.AppendLogEntryByCommand(req.Command, r.currentTerm)
 		// TODO: await logIndex got commit
 		return &CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 
@@ -380,6 +380,12 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 }
 
 func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
+	if reply.Term > r.currentTerm {
+		// if the receiver has got higher term than myself, turn myself into follower
+		r.become(FOLLOWER)
+		return
+	}
+
 	if !reply.Success {
 		if r.nextIndex[reply.PeerID] > 0 {
 			r.nextIndex[reply.PeerID]--
@@ -395,7 +401,7 @@ func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
 		r.commitIndex = commitIndex
 	}
 
-	// TODO: schedule apply
+	r.applyLogs()
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
@@ -492,7 +498,7 @@ func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) 
 func (r *raftNode) resetLeader() {
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 	for _, p := range r.peers {
-		r.nextIndex[p.ID] = lastLogIndex
+		r.nextIndex[p.ID] = lastLogIndex + 1
 		r.matchIndex[p.ID] = 0
 	}
 }
@@ -513,6 +519,10 @@ func (r *raftNode) become(s string) {
 	r.logger.Debugf("raftNode.set-state state=%s", s)
 	// TODO: atomic
 	r.state = s
+}
+
+func (r *raftNode) applyLogs() {
+	// TODO
 }
 
 func (r *raftNode) mustPersistState() {

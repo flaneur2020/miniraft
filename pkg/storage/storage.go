@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	kMeta = "m:meta"
-	kLogEntries  = "l:log-entries"
+	kMeta       = "m:meta"
+	kLogEntries = "l:log-entries"
 )
 
 type RaftLogEntry struct {
@@ -27,9 +27,13 @@ type RaftCommand struct {
 	Value  []byte `json:"value,omitempty"`
 }
 
+var (
+	NOPCommand = RaftCommand{OpType: "NOP", Key: []byte{}, Value: []byte{}}
+)
+
 type RaftMetaState struct {
 	LastApplied uint64 `json:"lastApplied"`
-	VotedFor 	string `json:"votedFor"`
+	VotedFor    string `json:"votedFor"`
 	CurrentTerm uint64 `json:"currentTerm"`
 }
 
@@ -42,7 +46,7 @@ type RaftStorage interface {
 	MustPutMetaState(s RaftMetaState)
 
 	AppendLogEntries(entries []RaftLogEntry) error
-	AppendLogEntriesByCommands(commands []RaftCommand, term uint64) (uint64, error)
+	AppendLogEntryByCommand(command RaftCommand, term uint64) (uint64, error)
 	MustGetLastLogIndexAndTerm() (uint64, uint64)
 	MustGetLogEntriesSince(index uint64) []RaftLogEntry
 	TruncateSince(index uint64)
@@ -75,7 +79,7 @@ func NewRaftStorage(path string, keyPrefix string) (RaftStorage, error) {
 func (s *raftStorage) Reset() {
 	s.MustPutMetaState(RaftMetaState{
 		LastApplied: 0,
-		VotedFor: "",
+		VotedFor:    "",
 		CurrentTerm: 0,
 	})
 }
@@ -148,19 +152,15 @@ func (s *raftStorage) AppendLogEntries(entries []RaftLogEntry) error {
 	return nil
 }
 
-func (s *raftStorage) AppendLogEntriesByCommands(commands []RaftCommand, term uint64) (uint64, error) {
+func (s *raftStorage) AppendLogEntryByCommand(command RaftCommand, term uint64) (uint64, error) {
 	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
-	es := []RaftLogEntry{}
-	for _, cmd := range commands {
-		le := RaftLogEntry{
-			Index:   lastIndex + 1,
-			Term:    term,
-			Command: cmd,
-		}
-		lastIndex++
-		es = append(es, le)
+	entry := RaftLogEntry{
+		Index:   lastIndex + 1,
+		Term:    term,
+		Command: command,
 	}
-	err := s.AppendLogEntries(es)
+	lastIndex++
+	err := s.AppendLogEntries([]RaftLogEntry{entry})
 	return lastIndex, err
 }
 
