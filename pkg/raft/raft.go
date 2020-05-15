@@ -299,6 +299,7 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	r.storage.AppendLogEntries(msg.LogEntries)
 	r.commitIndex = msg.CommitIndex
 
+	// TODO: just lastLogIndex += len(msg.logEntries)
 	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
 	return newAppendEntriesReply(true, r.currentTerm, lastLogIndex, r.ID, "success")
 }
