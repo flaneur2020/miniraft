@@ -8,6 +8,7 @@ todo
 - [x] 异步 runElection
 - [x] 计算 commitIndex
 - [ ] appendEntriesReply 处理
+- [ ] 确认 requestVote 和 appendEntries 逻辑
 - [ ] apply 逻辑
 - [ ] lock
 

@@ -227,6 +227,10 @@ func (r *raftNode) loopLeader() {
 			r.broadcastAppendEntries(replyC)
 
 		case reply := <-replyC:
+			if reply.Term > r.currentTerm {
+				// if the receiver has got higher term than myself, turn myself into follower
+				r.become(FOLLOWER)
+			}
 			r.processAppendEntriesReply(reply)
 
 		case ev := <-r.eventc:
@@ -364,30 +368,33 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 	for id, msg := range messages {
 		p := r.peers[id]
 
-		go func(msg *AppendEntriesMessage) {
+		go func(p Peer, msg *AppendEntriesMessage) {
 			reply, err := r.rpc.AppendEntries(p, msg)
 			if err != nil {
 				return
 			}
 			cb <- reply
-		}(msg)
+		}(p, msg)
 	}
 }
 
 func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
-	// TODO:
-	if reply.Term > r.currentTerm {
-		// if the receiver has got higher term than myself, turn myself into follower
-		r.become(FOLLOWER)
-	} else if reply.Success {
-		r.nextIndex[reply.PeerID] = reply.LastLogIndex + 1
-		r.matchIndex[reply.PeerID] = reply.LastLogIndex
-		r.commitIndex = calculateLeaderCommitIndex(r.matchIndex)
-	} else if !reply.Success {
+	if !reply.Success {
 		if r.nextIndex[reply.PeerID] > 0 {
 			r.nextIndex[reply.PeerID]--
 		}
+		return
 	}
+
+	r.nextIndex[reply.PeerID] = reply.LastLogIndex + 1
+	r.matchIndex[reply.PeerID] = reply.LastLogIndex
+
+	commitIndex := calculateLeaderCommitIndex(r.matchIndex)
+	if r.commitIndex < commitIndex {
+		r.commitIndex = commitIndex
+	}
+
+	// TODO: schedule apply
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
