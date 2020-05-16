@@ -56,7 +56,7 @@ func newRaftTestContext() *raftTestContext {
 
 	for i := 0; i < 3; i++ {
 		nodes[i].rpc = requester
-		go nodes[i].Loop()
+		nodes[i].Start()
 	}
 
 	return &raftTestContext{nodes}

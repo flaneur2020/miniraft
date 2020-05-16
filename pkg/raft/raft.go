@@ -23,7 +23,7 @@ type Peer struct {
 }
 
 type RaftNode interface {
-	Loop()
+	Start()
 	Process(msg RaftMessage) (RaftReply, error)
 	Stop()
 }
@@ -114,6 +114,29 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 	return r, nil
 }
 
+func (r *raftNode) Start() {
+	go func() {
+		r.loop()
+	}()
+}
+
+func (r *raftNode) loop() {
+	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
+
+	for r.state != CLOSED {
+		switch r.state {
+		case FOLLOWER:
+			r.loopFollower()
+		case LEADER:
+			r.loopLeader()
+		case CANDIDATE:
+			r.loopCandidate()
+		case CLOSED:
+		}
+	}
+	r.logger.Infof("raft.loop.closed")
+}
+
 func (r *raftNode) Process(msg RaftMessage) (RaftReply, error) {
 	ev := newRaftEV(msg)
 
@@ -130,23 +153,6 @@ func (r *raftNode) Process(msg RaftMessage) (RaftReply, error) {
 		close(ev.replyc)
 		return reply, nil
 	}
-}
-
-func (r *raftNode) Loop() {
-	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
-
-	for r.state != CLOSED {
-		switch r.state {
-		case FOLLOWER:
-			r.loopFollower()
-		case LEADER:
-			r.loopLeader()
-		case CANDIDATE:
-			r.loopCandidate()
-		case CLOSED:
-		}
-	}
-	r.logger.Infof("raft.loop.closed")
 }
 
 func (r *raftNode) loopFollower() {

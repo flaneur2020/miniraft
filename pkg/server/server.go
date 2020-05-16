@@ -32,7 +32,7 @@ func NewRaftServer(opt *raft.RaftOptions) (*RaftServer, error) {
 }
 
 func (s *RaftServer) ListenAndServe() error {
-	go s.r.Loop()
+	s.r.Start()
 	return s.httpServer.ListenAndServe()
 }
 
