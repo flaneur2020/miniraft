@@ -11,13 +11,6 @@ const (
 	INTERNAL_ERROR = 500
 )
 
-const (
-	kNop    = "nop"
-	kPut    = "put"
-	kGet    = "get"
-	kDelete = "delete"
-)
-
 type RaftMessage interface {
 	MessageKind() string
 }

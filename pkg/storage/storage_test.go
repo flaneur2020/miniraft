@@ -27,7 +27,7 @@ func TestRaftStorage_MustGetLastLogIndexAndTerm(t *testing.T) {
 	assert.Equal(t, uint64(0), lastIndex)
 	assert.Equal(t, uint64(0), lastTerm)
 
-	s.AppendLogEntryByCommand(NOPCommand, 1)
+	s.AppendLogEntryByCommand(NopCommand, 1)
 	lastIndex, lastTerm = s.MustGetLastLogIndexAndTerm()
 	assert.Equal(t, uint64(1), lastIndex)
 	assert.Equal(t, uint64(1), lastTerm)
@@ -38,9 +38,9 @@ func TestRaftStorage_TruncateSince(t *testing.T) {
 	s.Reset()
 	assert.Nil(t, err)
 
-	s.AppendLogEntryByCommand(NOPCommand, 1)
-	s.AppendLogEntryByCommand(NOPCommand, 1)
-	s.AppendLogEntryByCommand(NOPCommand, 1)
+	s.AppendLogEntryByCommand(NopCommand, 1)
+	s.AppendLogEntryByCommand(NopCommand, 1)
+	s.AppendLogEntryByCommand(NopCommand, 1)
 
 	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
 	assert.Equal(t, uint64(3), lastIndex)

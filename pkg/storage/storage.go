@@ -22,13 +22,20 @@ type RaftLogEntry struct {
 }
 
 type RaftCommand struct {
-	OpType string `json:"opType"`
-	Key    []byte `json:"key"`
-	Value  []byte `json:"value,omitempty"`
+	Type  string `json:"opType"`
+	Key   []byte `json:"key"`
+	Value []byte `json:"value,omitempty"`
 }
 
+const (
+	NopCommandType    = "nop"
+	PutCommandType    = "put"
+	GetCommandType    = "get"
+	DeleteCommandType = "delete"
+)
+
 var (
-	NOPCommand = RaftCommand{OpType: "NOP", Key: []byte{}, Value: []byte{}}
+	NopCommand = RaftCommand{Type: NopCommandType, Key: []byte{}, Value: []byte{}}
 )
 
 type RaftMetaState struct {

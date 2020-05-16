@@ -221,7 +221,7 @@ func (r *raftNode) loopLeader() {
 	replyC := make(chan *AppendEntriesReply)
 
 	// a leader should append a nop log entry immediately
-	logIndex, _ := r.storage.AppendLogEntryByCommand(storage.NOPCommand, r.currentTerm)
+	logIndex, _ := r.storage.AppendLogEntryByCommand(storage.NopCommand, r.currentTerm)
 	r.logger.Infof("leader.append-nop term=%v logIndex=%v", r.currentTerm, logIndex)
 
 	for r.state == LEADER {
@@ -342,16 +342,16 @@ func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply
 }
 
 func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
-	switch req.Command.OpType {
-	case kNop:
+	switch req.Command.Type {
+	case storage.NopCommandType:
 		return &CommandReply{Value: []byte{}, Message: "nop"}
 
-	case kPut:
+	case storage.PutCommandType:
 		logIndex, _ := r.storage.AppendLogEntryByCommand(req.Command, r.currentTerm)
 		// TODO: await logIndex got commit
 		return &CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 
-	case kGet:
+	case storage.GetCommandType:
 		v, exists := r.storage.MustGetKV(req.Command.Key)
 		if !exists {
 			return &CommandReply{Value: nil, Message: "not found"}
@@ -359,7 +359,7 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 		return &CommandReply{Value: v, Message: "success"}
 
 	default:
-		panic(fmt.Sprintf("unexpected opType: %s", req.Command.OpType))
+		panic(fmt.Sprintf("unexpected command type: %s", req.Command.Type))
 
 	}
 }
@@ -533,12 +533,23 @@ func (r *raftNode) closeRaft() {
 
 func (r *raftNode) become(s string) {
 	r.logger.Debugf("raft.set-state state=%s", s)
-	// TODO: atomic
 	r.state = s
 }
 
 func (r *raftNode) applyLogs() {
-	// TODO
+	// TODO: optimize this
+	entries := r.storage.MustGetLogEntriesSince(r.lastApplied)
+	for _, entry := range entries {
+		if entry.Index > r.commitIndex {
+			break
+		}
+
+		switch entry.Command.Type {
+		case storage.PutCommandType:
+			r.storage.MustPutKV(entry.Command.Key, entry.Command.Value)
+			r.logger.Debugf("raft.apply-log command=%#v", entry.Command)
+		}
+	}
 }
 
 func (r *raftNode) mustPersistState() {

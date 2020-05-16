@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Fleurer/miniraft/pkg/storage"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -144,7 +146,29 @@ func Test_Raft_Election(t *testing.T) {
 	assert.Equal(t, 1, len(tc.Candidates()))
 }
 
-func Test_Raft_Request(t *testing.T) {
+func TestRaftNode_Command(t *testing.T) {
+	tc := newRaftTestContext()
+	defer tc.Shutdown()
+
+	time.Sleep(2 * time.Second)
+	assert.True(t, tc.Leader() != nil)
+	assert.Equal(t, 2, len(tc.Followers()))
+
+	rl := tc.Leader()
+	rl.Process(&CommandMessage{storage.RaftCommand{
+		Type:  storage.PutCommandType,
+		Key:   []byte("key1"),
+		Value: []byte("value1"),
+	}})
+
+	time.Sleep(1 * time.Second)
+	rf := tc.Followers()[0]
+	got, _ := rf.storage.MustGetKV([]byte("key1"))
+	want := []byte("value1")
+	assert.Equal(t, want, got)
+}
+
+func TestRaftNode_Request(t *testing.T) {
 	tc := newRaftTestContext()
 	defer tc.Shutdown()
 
