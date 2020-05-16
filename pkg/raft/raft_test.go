@@ -19,7 +19,7 @@ func newRaftTestContext() *raftTestContext {
 	os.MkdirAll("/tmp/raftNode-test/", 0777)
 
 	var (
-		electionTimeout   uint64 = 1000
+		electionTimeout   uint64 = 900
 		heartbeatInterval uint64 = 100
 	)
 

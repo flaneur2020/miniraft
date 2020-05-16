@@ -40,7 +40,7 @@ func (rr *raftRPC) RequestVote(p Peer, request *RequestVoteMessage) (*RequestVot
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteReply{}
 	err := rr.post(p, url, request, &resp)
-	rr.logger.Debugf("raftNode.request.send-request vote to=%s msg=%#v err=%s", p.ID, request, err)
+	// rr.logger.Debugf("raftNode.request.send-request vote to=%s msg=%#v err=%s", p.ID, request, err)
 	if err != nil {
 		return nil, err
 	}

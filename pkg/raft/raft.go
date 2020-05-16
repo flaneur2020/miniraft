@@ -134,7 +134,7 @@ func (r *raftNode) Process(msg RaftMessage) (RaftReply, error) {
 }
 
 func (r *raftNode) Loop() {
-	r.logger.Infof("raftNode.loop.start: peers=%v", r.peers)
+	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
 
 	for r.state != CLOSED {
 		switch r.state {
@@ -147,7 +147,7 @@ func (r *raftNode) Loop() {
 		case CLOSED:
 		}
 	}
-	r.logger.Infof("raftNode.loop.closed")
+	r.logger.Infof("raft.loop.closed")
 }
 
 func (r *raftNode) loopFollower() {
@@ -221,7 +221,8 @@ func (r *raftNode) loopLeader() {
 	replyC := make(chan *AppendEntriesReply)
 
 	// a leader should append a nop log entry immediately
-	r.storage.AppendLogEntryByCommand(storage.NOPCommand, r.currentTerm)
+	logIndex, _ := r.storage.AppendLogEntryByCommand(storage.NOPCommand, r.currentTerm)
+	r.logger.Infof("leader.append-nop term=%v logIndex=%v", r.currentTerm, logIndex)
 
 	for r.state == LEADER {
 		select {
@@ -263,7 +264,7 @@ func (r *raftNode) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
-	// r.logger.Debugf("raftNode.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, currentTerm, lastLogIndex)
+	r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, r.currentTerm, lastLogIndex)
 
 	if msg.Term < r.currentTerm {
 		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "msg.Term < r.currentTerm")
@@ -309,7 +310,8 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
 	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
 
-	r.logger.Debugf("raftNode.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, r.currentTerm, r.votedFor, lastLogIndex, lastLogTerm)
+	r.logger.Debugf("raft.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, r.currentTerm, r.votedFor, lastLogIndex, lastLogTerm)
+
 	// if the caller's term smaller than mine, refuse
 	if msg.Term < r.currentTerm {
 		return newRequestVoteReply(false, r.currentTerm, fmt.Sprintf("msg.term: %d < curremtTerm: %d", msg.Term, r.currentTerm))
@@ -367,7 +369,7 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 		return
 	}
 
-	r.logger.Debugf("leader.broadcast-heartbeats messages=%v", messages)
+	r.logger.Debugf("leader.broadcast-heartbeats nextIndex=%v matchIndex=%v term=%v commitIndex=%v", r.nextIndex, r.matchIndex, r.currentTerm, r.commitIndex)
 	for id, msg := range messages {
 		p := r.peers[id]
 
@@ -382,6 +384,8 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 }
 
 func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
+	r.logger.Debugf("leader.process-append-entries-reply reply=%#v", reply)
+
 	if reply.Term > r.currentTerm {
 		// if the receiver has got higher term than myself, turn myself into follower
 		r.become(FOLLOWER)
@@ -416,12 +420,12 @@ func (r *raftNode) runElection(cb chan bool) {
 	r.currentTerm += 1
 	r.votedFor = r.ID
 	r.mustPersistState()
-	r.logger.Debugf("raftNode.candidate.vote term=%d votedFor=%s", r.currentTerm, r.ID)
+	r.logger.Debugf("raft.candidate.vote term=%d votedFor=%s", r.currentTerm, r.ID)
 
 	// send requestVote messages asynchronously, collect the vote results into grantedC
 	messages, err := r.buildRequestVoteMessages()
 	if err != nil {
-		r.logger.Debugf("raftNode.candidate.vote.buildRequestVoteMessages err=%s", err)
+		r.logger.Debugf("raft.candidate.vote.buildRequestVoteMessages err=%s", err)
 		return
 	}
 
@@ -431,7 +435,7 @@ func (r *raftNode) runElection(cb chan bool) {
 
 		go func(p Peer, msg *RequestVoteMessage) {
 			reply, err := r.rpc.RequestVote(p, msg)
-			r.logger.Debugf("raftNode.candidate.send-request-vote target=%s resp=%#v err=%s", id, reply, err)
+			r.logger.Debugf("raft.candidate.request-vote target=%s resp=%#v err=%s", id, reply, err)
 			replyC <- reply
 		}(p, msg)
 	}
@@ -446,7 +450,7 @@ func (r *raftNode) runElection(cb chan bool) {
 		}
 
 		success := (granted+1)*2 > len(r.peers)+1
-		r.logger.Debugf("raftNode.candidate.broadcast-request-vote granted=%d total=%d success=%d", granted+1, len(r.peers)+1, success)
+		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%v", granted+1, len(r.peers)+1, success)
 
 		if success {
 			cb <- success
@@ -482,6 +486,7 @@ func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) 
 		if idx == 0 {
 			msg.PrevLogIndex = 0
 			msg.PrevLogTerm = 0
+			msg.LogEntries = r.storage.MustGetLogEntriesSince(0)
 		} else {
 			logEntries := r.storage.MustGetLogEntriesSince(idx - 1)
 			if len(logEntries) >= 1 {
@@ -506,7 +511,7 @@ func (r *raftNode) resetLeader() {
 }
 
 func (r *raftNode) Shutdown() {
-	r.logger.Debugf("raftNode.shutdown")
+	r.logger.Debugf("raft.shutdown")
 	select {
 	case <-r.closed:
 		return
@@ -516,14 +521,14 @@ func (r *raftNode) Shutdown() {
 }
 
 func (r *raftNode) closeRaft() {
-	r.logger.Infof("raftNode.close-raftNode")
+	r.logger.Infof("raft.close-raftNode")
 	r.state = CLOSED
 	r.storage.Close()
 	close(r.eventc)
 }
 
 func (r *raftNode) become(s string) {
-	r.logger.Debugf("raftNode.set-state state=%s", s)
+	r.logger.Debugf("raft.set-state state=%s", s)
 	// TODO: atomic
 	r.state = s
 }
