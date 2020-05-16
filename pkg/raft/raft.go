@@ -3,6 +3,7 @@ package raft
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/Fleurer/miniraft/pkg/storage"
@@ -54,8 +55,9 @@ type raftNode struct {
 	storage storage.RaftStorage
 	rpc     RaftRPC
 
-	eventc chan raftEV
-	closed chan struct{}
+	eventc       chan raftEV
+	closed       chan struct{}
+	routineGroup sync.WaitGroup
 }
 
 type RaftOptions struct {
@@ -115,9 +117,30 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 }
 
 func (r *raftNode) Start() {
+	r.routineGroup.Add(1)
 	go func() {
 		r.loop()
+		r.routineGroup.Done()
 	}()
+}
+
+func (r *raftNode) Stop() {
+	r.logger.Debugf("raft.stop")
+
+	select {
+	case <-r.closed:
+		return
+	default:
+		close(r.closed)
+	}
+
+	r.routineGroup.Wait()
+}
+
+func (r *raftNode) closeRaft() {
+	r.state = CLOSED
+	r.storage.Close()
+	close(r.eventc)
 }
 
 func (r *raftNode) loop() {
@@ -134,6 +157,7 @@ func (r *raftNode) loop() {
 		case CLOSED:
 		}
 	}
+
 	r.logger.Infof("raft.loop.closed")
 }
 
@@ -391,7 +415,10 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 	for id, msg := range messages {
 		p := r.peers[id]
 
+		r.routineGroup.Add(1)
 		go func(p Peer, msg *AppendEntriesMessage) {
+			defer r.routineGroup.Done()
+
 			reply, err := r.rpc.AppendEntries(p, msg)
 			if err != nil {
 				return
@@ -450,14 +477,21 @@ func (r *raftNode) runElection(cb chan bool) {
 	for id, msg := range messages {
 		p := r.peers[id]
 
+		r.routineGroup.Add(1)
 		go func(p Peer, msg *RequestVoteMessage) {
+			defer r.routineGroup.Done()
+
 			reply, err := r.rpc.RequestVote(p, msg)
-			r.logger.Debugf("raft.candidate.request-vote target=%s resp=%#v err=%s", id, reply, err)
 			replyC <- reply
+
+			r.logger.Debugf("raft.candidate.request-vote target=%s resp=%#v err=%s", id, reply, err)
 		}(p, msg)
 	}
 
+	r.routineGroup.Add(1)
 	go func() {
+		defer r.routineGroup.Done()
+
 		granted := 0
 		for range messages {
 			reply := <-replyC
@@ -525,23 +559,6 @@ func (r *raftNode) resetLeader() {
 		r.nextIndex[p.ID] = lastLogIndex + 1
 		r.matchIndex[p.ID] = 0
 	}
-}
-
-func (r *raftNode) Stop() {
-	r.logger.Debugf("raft.shutdown")
-	select {
-	case <-r.closed:
-		return
-	default:
-		close(r.closed)
-	}
-}
-
-func (r *raftNode) closeRaft() {
-	r.logger.Infof("raft.close-raftNode")
-	r.state = CLOSED
-	r.storage.Close()
-	close(r.eventc)
 }
 
 func (r *raftNode) become(s string) {
