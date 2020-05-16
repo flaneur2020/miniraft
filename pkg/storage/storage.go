@@ -38,7 +38,7 @@ var (
 	NopCommand = RaftCommand{Type: NopCommandType, Key: []byte{}, Value: []byte{}}
 )
 
-type RaftMetaState struct {
+type RaftHardState struct {
 	LastApplied uint64 `json:"lastApplied"`
 	VotedFor    string `json:"votedFor"`
 	CurrentTerm uint64 `json:"currentTerm"`
@@ -49,8 +49,8 @@ type RaftStorage interface {
 	MustPutKV([]byte, []byte)
 	MustDeleteKV([]byte)
 
-	MustGetMetaState() RaftMetaState
-	MustPutMetaState(s RaftMetaState)
+	GetHardState() (*RaftHardState, error)
+	PutHardState(s *RaftHardState) error
 
 	AppendLogEntries(entries []RaftLogEntry) error
 	AppendLogEntryByCommand(command RaftCommand, term uint64) (uint64, error)
@@ -84,7 +84,7 @@ func NewRaftStorage(path string, keyPrefix string) (RaftStorage, error) {
 }
 
 func (s *raftStorage) Reset() {
-	s.MustPutMetaState(RaftMetaState{
+	s.PutHardState(&RaftHardState{
 		LastApplied: 0,
 		VotedFor:    "",
 		CurrentTerm: 0,
@@ -92,27 +92,23 @@ func (s *raftStorage) Reset() {
 	s.TruncateSince(0)
 }
 
-func (s *raftStorage) MustPutMetaState(m RaftMetaState) {
+func (s *raftStorage) PutHardState(m *RaftHardState) error {
 	buf, err := json.Marshal(m)
 	if err != nil {
-		panic("marshal failed")
+		return err
 	}
-	s.dbPutString([]byte(kMeta), string(buf))
+	return s.dbPutString([]byte(kMeta), string(buf))
 }
 
-func (s *raftStorage) MustGetMetaState() RaftMetaState {
-	m := RaftMetaState{}
+func (s *raftStorage) GetHardState() (*RaftHardState, error) {
+	m := &RaftHardState{}
 	str, err := s.dbGetString([]byte(kMeta))
 	if err == lerrors.ErrNotFound {
-		return m
+		return m, nil
 	} else if err != nil {
-		panic(err)
+		return nil, err
 	}
-	err = json.Unmarshal([]byte(str), &m)
-	if err != nil {
-		panic("unmarshal failed")
-	}
-	return m
+	return json.Unmarshal([]byte(str), &m)
 }
 
 func (s *raftStorage) Close() {

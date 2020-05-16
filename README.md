@@ -10,8 +10,8 @@ todo
 - [x] appendEntriesReply 处理
 - [x] log replication bug 处理
 - [x] apply 逻辑
+- [ ] lastApplied 和状态机事务
 - [ ] Node.start
-- [ ] 确认 requestVote 和 appendEntries 逻辑
 - [ ] lock
 
 references

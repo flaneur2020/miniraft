@@ -556,15 +556,21 @@ func (r *raftNode) applyLogs() {
 }
 
 func (r *raftNode) mustPersistState() {
-	r.storage.MustPutMetaState(storage.RaftMetaState{
+	err := r.storage.PutHardState(&storage.RaftHardState{
 		VotedFor:    r.votedFor,
 		CurrentTerm: r.currentTerm,
 		LastApplied: r.lastApplied,
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (r *raftNode) mustLoadState() {
-	m := r.storage.MustGetMetaState()
+	m, err := r.storage.GetHardState()
+	if err != nil {
+		panic(err)
+	}
 	r.currentTerm = m.CurrentTerm
 	r.votedFor = m.VotedFor
 	r.lastApplied = m.LastApplied
