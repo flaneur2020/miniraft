@@ -18,6 +18,46 @@ func Test_GetLastLogEntry(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestRaftStorage_MustGetLastLogIndexAndTerm(t *testing.T) {
+	s, err := NewRaftStorage("/tmp/test03", "raft-test01")
+	s.Reset()
+	assert.Nil(t, err)
+
+	lastIndex, lastTerm := s.MustGetLastLogIndexAndTerm()
+	assert.Equal(t, uint64(0), lastIndex)
+	assert.Equal(t, uint64(0), lastTerm)
+
+	s.AppendLogEntryByCommand(NOPCommand, 1)
+	lastIndex, lastTerm = s.MustGetLastLogIndexAndTerm()
+	assert.Equal(t, uint64(1), lastIndex)
+	assert.Equal(t, uint64(1), lastTerm)
+}
+
+func TestRaftStorage_TruncateSince(t *testing.T) {
+	s, err := NewRaftStorage("/tmp/test02", "raft-test01")
+	s.Reset()
+	assert.Nil(t, err)
+
+	s.AppendLogEntryByCommand(NOPCommand, 1)
+	s.AppendLogEntryByCommand(NOPCommand, 1)
+	s.AppendLogEntryByCommand(NOPCommand, 1)
+
+	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
+	assert.Equal(t, uint64(3), lastIndex)
+
+	s.TruncateSince(3)
+	lastIndex, _ = s.MustGetLastLogIndexAndTerm()
+	assert.Equal(t, uint64(2), lastIndex)
+
+	s.TruncateSince(2)
+	lastIndex, _ = s.MustGetLastLogIndexAndTerm()
+	assert.Equal(t, uint64(1), lastIndex)
+
+	s.TruncateSince(0)
+	lastIndex, _ = s.MustGetLastLogIndexAndTerm()
+	assert.Equal(t, uint64(0), lastIndex)
+}
+
 func Test_GetLogEntriesSince(t *testing.T) {
 	s, err := NewRaftStorage("/tmp/test02", "raft-test01")
 	assert.Nil(t, err)

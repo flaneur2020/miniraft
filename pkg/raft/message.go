@@ -11,7 +11,6 @@ const (
 	INTERNAL_ERROR = 500
 )
 
-
 const (
 	kNop    = "nop"
 	kPut    = "put"
@@ -42,7 +41,7 @@ func (m *AppendEntriesMessage) MessageKind() string {
 }
 
 type AppendEntriesReply struct {
-	PeerID 		 string `json:"peerID"`
+	PeerID       string `json:"peerID"`
 	Term         uint64 `json:"term"`
 	Success      bool   `json:"success"`
 	Message      string `json:"message"`
@@ -82,10 +81,10 @@ func (m *ShowStatusMessage) MessageKind() string {
 }
 
 type ShowStatusReply struct {
-	Term        uint64               `json:"term"`
-	CommitIndex uint64               `json:"commitIndex"`
-	Peers       map[string]Peer      `json:"peers"`
-	State       string               `json:"state"`
+	Term        uint64          `json:"term"`
+	CommitIndex uint64          `json:"commitIndex"`
+	Peers       map[string]Peer `json:"peers"`
+	State       string          `json:"state"`
 }
 
 func (r *ShowStatusReply) ReplyKind() string {

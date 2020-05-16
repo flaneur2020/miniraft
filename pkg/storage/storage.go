@@ -49,7 +49,7 @@ type RaftStorage interface {
 	AppendLogEntryByCommand(command RaftCommand, term uint64) (uint64, error)
 	MustGetLastLogIndexAndTerm() (uint64, uint64)
 	MustGetLogEntriesSince(index uint64) []RaftLogEntry
-	TruncateSince(index uint64)
+	TruncateSince(index uint64) int
 
 	Reset()
 	Close()
@@ -82,6 +82,7 @@ func (s *raftStorage) Reset() {
 		VotedFor:    "",
 		CurrentTerm: 0,
 	})
+	s.TruncateSince(0)
 }
 
 func (s *raftStorage) MustPutMetaState(m RaftMetaState) {
@@ -190,7 +191,7 @@ func (s *raftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
 	return es
 }
 
-func (s *raftStorage) TruncateSince(index uint64) {
+func (s *raftStorage) TruncateSince(index uint64) int {
 	entries := s.MustGetLogEntriesSince(index)
 	batch := new(leveldb.Batch)
 	for _, entry := range entries {
@@ -200,6 +201,7 @@ func (s *raftStorage) TruncateSince(index uint64) {
 	if err != nil {
 		panic(err)
 	}
+	return len(entries)
 }
 
 func (s *raftStorage) getLastLogEntry() (*RaftLogEntry, error) {

@@ -264,7 +264,7 @@ func (r *raftNode) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
 	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
 
-	r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, r.currentTerm, lastLogIndex)
+	// r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, r.currentTerm, lastLogIndex)
 
 	if msg.Term < r.currentTerm {
 		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "msg.Term < r.currentTerm")
@@ -291,16 +291,17 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	}
 
 	if msg.PrevLogIndex > lastLogIndex {
-		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "log not match")
+		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, fmt.Sprintf("log not match: msg.prevLogIndex(%v) > lastLogIndex(%v)", msg.PrevLogIndex, lastLogIndex))
 	}
 
 	if msg.PrevLogIndex < lastLogIndex {
-		r.storage.TruncateSince(msg.PrevLogIndex + 1)
+		c := r.storage.TruncateSince(msg.PrevLogIndex + 1)
+		r.logger.Infof("raft.truncate-since msg.PrevLogIndex=%v lastLogIndex=%v count=%v", msg.PrevLogIndex, lastLogIndex, c)
 	}
 
 	r.storage.AppendLogEntries(msg.LogEntries)
-	lastLogIndex += uint64(len(msg.LogEntries))
 
+	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
 	r.commitIndex = msg.CommitIndex
 	r.applyLogs()
 
@@ -369,7 +370,9 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 		return
 	}
 
-	r.logger.Debugf("leader.broadcast-heartbeats nextIndex=%v matchIndex=%v term=%v commitIndex=%v", r.nextIndex, r.matchIndex, r.currentTerm, r.commitIndex)
+	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
+	r.logger.Debugf("leader.broadcast-heartbeats nextIndex=%v matchIndex=%v term=%v commitIndex=%v lastLogIndex=%v", r.nextIndex, r.matchIndex, r.currentTerm, r.commitIndex, lastLogIndex)
+
 	for id, msg := range messages {
 		p := r.peers[id]
 
@@ -384,7 +387,7 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 }
 
 func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
-	r.logger.Debugf("leader.process-append-entries-reply reply=%#v", reply)
+	// r.logger.Debugf("leader.process-append-entries-reply reply=%#v", reply)
 
 	if reply.Term > r.currentTerm {
 		// if the receiver has got higher term than myself, turn myself into follower
@@ -393,6 +396,7 @@ func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
 	}
 
 	if !reply.Success {
+		r.logger.Debugf("leader.process-append-entries-reply not-success msg=%s", reply.Message)
 		if r.nextIndex[reply.PeerID] > 0 {
 			r.nextIndex[reply.PeerID]--
 		}
