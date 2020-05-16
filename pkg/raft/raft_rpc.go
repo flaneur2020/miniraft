@@ -3,11 +3,13 @@ package raft
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/Fleurer/miniraft/pkg/util"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/Fleurer/miniraft/pkg/util"
 )
 
 type RaftRPC interface {
@@ -78,6 +80,13 @@ type mockRaftRequester struct {
 func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
+
+	select {
+	case <-raft.closed:
+		return nil, errors.New("raft closed")
+	default:
+	}
+
 	raft.eventc <- ev
 	resp := <-ev.replyc
 	if r, ok := resp.(*MessageReply); ok {
@@ -92,8 +101,16 @@ func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMessage) (*Reque
 func (r *mockRaftRequester) AppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
+
+	select {
+	case <-raft.closed:
+		return nil, errors.New("raft closed")
+	default:
+	}
+
 	raft.eventc <- ev
 	resp := <-ev.replyc
+
 	if r, ok := resp.(*MessageReply); ok {
 		return nil, fmt.Errorf("bad result: %s", r.Message)
 	} else if r, ok := resp.(*AppendEntriesReply); ok {

@@ -135,7 +135,8 @@ func (r *raftNode) Process(msg RaftMessage) (RaftReply, error) {
 
 func (r *raftNode) Loop() {
 	r.logger.Infof("raftNode.loop.start: peers=%v", r.peers)
-	for {
+
+	for r.state != CLOSED {
 		switch r.state {
 		case FOLLOWER:
 			r.loopFollower()
@@ -144,10 +145,9 @@ func (r *raftNode) Loop() {
 		case CANDIDATE:
 			r.loopCandidate()
 		case CLOSED:
-			r.logger.Infof("raftNode.loop.closed")
-			break
 		}
 	}
+	r.logger.Infof("raftNode.loop.closed")
 }
 
 func (r *raftNode) loopFollower() {
@@ -507,7 +507,12 @@ func (r *raftNode) resetLeader() {
 
 func (r *raftNode) Shutdown() {
 	r.logger.Debugf("raftNode.shutdown")
-	close(r.closed)
+	select {
+	case <-r.closed:
+		return
+	default:
+		close(r.closed)
+	}
 }
 
 func (r *raftNode) closeRaft() {

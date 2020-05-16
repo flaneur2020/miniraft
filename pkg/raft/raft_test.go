@@ -1,19 +1,17 @@
 package raft
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/facebookgo/clock"
 	"github.com/stretchr/testify/assert"
 )
 
 type raftTestContext struct {
-	raft1 *raftNode
-	raft2 *raftNode
-	raft3 *raftNode
+	nodes []*raftNode
 }
 
 func newRaftTestContext() *raftTestContext {
@@ -25,69 +23,81 @@ func newRaftTestContext() *raftTestContext {
 		heartbeatInterval uint64 = 100
 	)
 
-	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
-	opt1 := &RaftOptions{
-		ID:                  "r1",
-		StoragePath:         "/tmp/raftNode-test/r01",
-		ListenAddr:          "0.0.0.0:4501",
-		PeerAddr:            "192.168.0.1:4501",
-		InitialPeers:        initialPeers,
-		ElectionTimeoutMs:   electionTimeout,
-		HeartbeatIntervalMs: heartbeatInterval,
-	}
-	opt2 := &RaftOptions{
-		ID:                  "r2",
-		StoragePath:         "/tmp/raftNode-test/r02",
-		ListenAddr:          "0.0.0.0:4502",
-		PeerAddr:            "192.168.0.1:4502",
-		InitialPeers:        initialPeers,
-		ElectionTimeoutMs:   electionTimeout,
-		HeartbeatIntervalMs: heartbeatInterval,
-	}
-	opt3 := &RaftOptions{
-		ID:                  "r3",
-		StoragePath:         "/tmp/raftNode-test/r03",
-		ListenAddr:          "0.0.0.0:4503",
-		PeerAddr:            "192.168.0.1:4503",
-		InitialPeers:        initialPeers,
-		ElectionTimeoutMs:   electionTimeout,
-		HeartbeatIntervalMs: heartbeatInterval,
+	initialPeers := map[string]string{"r0": "192.168.0.1:4500", "r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502"}
+
+	opts := [3]*RaftOptions{}
+	for i := 0; i < 3; i++ {
+		opts[i] = &RaftOptions{
+			ID:                  fmt.Sprintf("r%d", i),
+			StoragePath:         fmt.Sprintf("/tmp/raftNode-test/r0%d", i),
+			ListenAddr:          fmt.Sprintf("0.0.0.0:450%d", i),
+			PeerAddr:            fmt.Sprintf("192.168.0.1:450%d", i),
+			InitialPeers:        initialPeers,
+			ElectionTimeoutMs:   electionTimeout,
+			HeartbeatIntervalMs: heartbeatInterval,
+		}
 	}
 
-	raft1, _ := newRaft(opt1)
-	raft2, _ := newRaft(opt2)
-	raft3, _ := newRaft(opt3)
-
-	requester := &mockRaftRequester{map[string]*raftNode{"r1": raft1, "r2": raft2, "r3": raft3}}
-	clock1 := clock.New()
-	clock2 := clock.New()
-	clock3 := clock.New()
-
-	raft1.rpc = requester
-	raft1.clock = clock1
-
-	raft2.rpc = requester
-	raft2.clock = clock2
-
-	raft3.rpc = requester
-	raft3.clock = clock3
-
-	go raft1.Loop()
-	go raft2.Loop()
-	go raft3.Loop()
-
-	return &raftTestContext{
-		raft1: raft1,
-		raft2: raft2,
-		raft3: raft3,
+	nodes := []*raftNode{}
+	for i := 0; i < 3; i++ {
+		node, _ := newRaft(opts[i])
+		nodes = append(nodes, node)
 	}
+
+	requester := &mockRaftRequester{
+		rafts: map[string]*raftNode{
+			"r0": nodes[0],
+			"r1": nodes[1],
+			"r2": nodes[2],
+		},
+	}
+
+	for i := 0; i < 3; i++ {
+		nodes[i].rpc = requester
+		go nodes[i].Loop()
+	}
+
+	return &raftTestContext{nodes}
+}
+
+func (c *raftTestContext) Leader() *raftNode {
+	for _, node := range c.nodes {
+		if node.state == LEADER {
+			return node
+		}
+	}
+	return nil
+}
+
+func (c *raftTestContext) Followers() []*raftNode {
+	nodes := []*raftNode{}
+	for _, node := range c.nodes {
+		if node.state == FOLLOWER {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}
+
+func (c *raftTestContext) Candidates() []*raftNode {
+	nodes := []*raftNode{}
+	for _, node := range c.nodes {
+		if node.state == CANDIDATE {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
+}
+
+func (c *raftTestContext) Node(i int) *raftNode {
+	return c.nodes[i-1]
 }
 
 func (c *raftTestContext) Shutdown() {
 	log.Printf("raftTestContext.shutdown")
-	c.raft1.Shutdown()
-	c.raft2.Shutdown()
-	c.raft3.Shutdown()
+	for _, node := range c.nodes {
+		node.Shutdown()
+	}
 }
 
 func Test_NewRaft(t *testing.T) {
@@ -110,23 +120,41 @@ func Test_NewRaft(t *testing.T) {
 	assert.Equal(t, r.peers["r2"], Peer{ID: "r2", Addr: "192.168.0.1:4502"})
 }
 
-func Test_RaftRequest(t *testing.T) {
-	// go test github.com/fleurer/miniraft/pkg/raftNode -run Test_RaftRequest  -v
+func Test_Raft_Election(t *testing.T) {
+	tc := newRaftTestContext()
+	defer tc.Shutdown()
+
+	assert.True(t, tc.Leader() == nil)
+	assert.Equal(t, 3, len(tc.Followers()))
+
+	time.Sleep(2 * time.Second)
+	assert.True(t, tc.Leader() != nil)
+	assert.Equal(t, 2, len(tc.Followers()))
+
+	rl := tc.Leader()
+	rl.Shutdown()
+	time.Sleep(2 * time.Second)
+	assert.True(t, tc.Leader() != nil)
+	assert.Equal(t, 1, len(tc.Followers()))
+
+	rl = tc.Leader()
+	rl.Shutdown()
+	time.Sleep(2 * time.Second)
+	assert.True(t, tc.Leader() == nil)
+	assert.Equal(t, 1, len(tc.Candidates()))
+}
+
+func Test_Raft_Request(t *testing.T) {
 	tc := newRaftTestContext()
 	defer tc.Shutdown()
 
 	req := &AppendEntriesMessage{}
-	reply, err := tc.raft1.rpc.AppendEntries(tc.raft1.peers["r2"], req)
-	assert.Equal(t, err, nil)
-	assert.Equal(t, reply, &AppendEntriesReply{Term: 0x0, Success: true, PeerID: "r2", Message: "success", LastLogIndex: 0x0})
-
-	assert.Equal(t, tc.raft1.state, FOLLOWER)
-	assert.Equal(t, tc.raft2.state, FOLLOWER)
-	assert.Equal(t, tc.raft3.state, FOLLOWER)
-
-	time.Sleep(2 * time.Second)
-
-	assert.True(t, tc.raft1.state == LEADER || tc.raft2.state == LEADER || tc.raft3.state == LEADER)
+	rf1 := tc.Followers()[0]
+	rf2 := tc.Followers()[1]
+	got, err := rf1.rpc.AppendEntries(rf1.peers[rf2.ID], req)
+	// want := &AppendEntriesReply{Term: 0x0, Success: true, PeerID: "r1", Message: "success", LastLogIndex: 0x0}
+	assert.Equal(t, nil, err)
+	assert.Equal(t, true, got.Success)
 }
 
 func Test_calculateLeaderCommitIndex(t *testing.T) {
