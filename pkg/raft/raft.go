@@ -59,12 +59,13 @@ type raftNode struct {
 }
 
 type RaftOptions struct {
-	ID                string            `json:"id"`
-	StoragePath       string            `json:"storagePath"`
-	ListenAddr        string            `json:"listenAddr"`
-	PeerAddr          string            `json:"peerAddr"`
-	InitialPeers      map[string]string `json:"initialPeers"`
-	ElectionTimeoutMs uint64            `json:"electionTimeoutMs"`
+	ID                  string            `json:"id"`
+	StoragePath         string            `json:"storagePath"`
+	ListenAddr          string            `json:"listenAddr"`
+	PeerAddr            string            `json:"peerAddr"`
+	InitialPeers        map[string]string `json:"initialPeers"`
+	ElectionTimeoutMs   uint64            `json:"electionTimeoutMs"`
+	HeartbeatIntervalMs uint64            `json:"heartbeatIntervalMs"`
 }
 
 type raftEV struct {
@@ -98,8 +99,8 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 	r := &raftNode{}
 	r.ID = opt.ID
 	r.state = FOLLOWER
-	r.heartbeatInterval = 100 * time.Millisecond
 	r.electionTimeout = time.Duration(opt.ElectionTimeoutMs) * time.Millisecond
+	r.heartbeatInterval = time.Duration(opt.HeartbeatIntervalMs) * time.Millisecond
 	r.peers = peers
 	r.storage = s
 	r.votedFor = ""

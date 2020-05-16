@@ -4,7 +4,7 @@ build:
 	go build -o bin/miniraft ./cmd/miniraft/*.go
 
 test:
-	go test -i ./... && go test -v ./...
+	go test -c ./pkg/raft && ./raft.test
 
 clean:
 	rm -rf bin/*

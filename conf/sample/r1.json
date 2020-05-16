@@ -4,5 +4,6 @@
     "listenAddr": "0.0.0.0:4501",
     "peerAddr": "localhost:4501",
     "electionTimeoutMs": 5000,
+    "heartbeatIntervalMs": 500,
     "initialPeers": {"r1": "localhost:4501", "r2": "localhost:4502", "r3": "localhost:4503"}
 }

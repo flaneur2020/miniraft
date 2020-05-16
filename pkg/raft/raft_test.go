@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -9,34 +10,48 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makeRaftInstances() (*raftNode, *raftNode, *raftNode, *clock.Mock) {
+type raftTestContext struct {
+	raft1 *raftNode
+	raft2 *raftNode
+	raft3 *raftNode
+}
+
+func newRaftTestContext() *raftTestContext {
 	os.RemoveAll("/tmp/raftNode-test/")
 	os.MkdirAll("/tmp/raftNode-test/", 0777)
 
+	var (
+		electionTimeout   uint64 = 1000
+		heartbeatInterval uint64 = 100
+	)
+
 	initialPeers := map[string]string{"r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502", "r3": "192.168.0.1:4503"}
 	opt1 := &RaftOptions{
-		ID:                "r1",
-		StoragePath:       "/tmp/raftNode-test/r01",
-		ListenAddr:        "0.0.0.0:4501",
-		PeerAddr:          "192.168.0.1:4501",
-		InitialPeers:      initialPeers,
-		ElectionTimeoutMs: 5000,
+		ID:                  "r1",
+		StoragePath:         "/tmp/raftNode-test/r01",
+		ListenAddr:          "0.0.0.0:4501",
+		PeerAddr:            "192.168.0.1:4501",
+		InitialPeers:        initialPeers,
+		ElectionTimeoutMs:   electionTimeout,
+		HeartbeatIntervalMs: heartbeatInterval,
 	}
 	opt2 := &RaftOptions{
-		ID:                "r2",
-		StoragePath:       "/tmp/raftNode-test/r02",
-		ListenAddr:        "0.0.0.0:4502",
-		PeerAddr:          "192.168.0.1:4502",
-		InitialPeers:      initialPeers,
-		ElectionTimeoutMs: 5000,
+		ID:                  "r2",
+		StoragePath:         "/tmp/raftNode-test/r02",
+		ListenAddr:          "0.0.0.0:4502",
+		PeerAddr:            "192.168.0.1:4502",
+		InitialPeers:        initialPeers,
+		ElectionTimeoutMs:   electionTimeout,
+		HeartbeatIntervalMs: heartbeatInterval,
 	}
 	opt3 := &RaftOptions{
-		ID:                "r3",
-		StoragePath:       "/tmp/raftNode-test/r03",
-		ListenAddr:        "0.0.0.0:4503",
-		PeerAddr:          "192.168.0.1:4503",
-		InitialPeers:      initialPeers,
-		ElectionTimeoutMs: 5000,
+		ID:                  "r3",
+		StoragePath:         "/tmp/raftNode-test/r03",
+		ListenAddr:          "0.0.0.0:4503",
+		PeerAddr:            "192.168.0.1:4503",
+		InitialPeers:        initialPeers,
+		ElectionTimeoutMs:   electionTimeout,
+		HeartbeatIntervalMs: heartbeatInterval,
 	}
 
 	raft1, _ := newRaft(opt1)
@@ -44,22 +59,35 @@ func makeRaftInstances() (*raftNode, *raftNode, *raftNode, *clock.Mock) {
 	raft3, _ := newRaft(opt3)
 
 	requester := &mockRaftRequester{map[string]*raftNode{"r1": raft1, "r2": raft2, "r3": raft3}}
-	clock := clock.NewMock()
+	clock1 := clock.New()
+	clock2 := clock.New()
+	clock3 := clock.New()
 
 	raft1.rpc = requester
-	raft1.clock = clock
+	raft1.clock = clock1
 
 	raft2.rpc = requester
-	raft2.clock = clock
+	raft2.clock = clock2
 
 	raft3.rpc = requester
-	raft3.clock = clock
+	raft3.clock = clock3
 
 	go raft1.Loop()
 	go raft2.Loop()
 	go raft3.Loop()
 
-	return raft1, raft2, raft3, clock
+	return &raftTestContext{
+		raft1: raft1,
+		raft2: raft2,
+		raft3: raft3,
+	}
+}
+
+func (c *raftTestContext) Shutdown() {
+	log.Printf("raftTestContext.shutdown")
+	c.raft1.Shutdown()
+	c.raft2.Shutdown()
+	c.raft3.Shutdown()
 }
 
 func Test_NewRaft(t *testing.T) {
@@ -84,29 +112,21 @@ func Test_NewRaft(t *testing.T) {
 
 func Test_RaftRequest(t *testing.T) {
 	// go test github.com/fleurer/miniraft/pkg/raftNode -run Test_RaftRequest  -v
-	raft1, raft2, raft3, clock := makeRaftInstances()
-	defer func() {
-		raft1.Shutdown()
-		raft2.Shutdown()
-		raft3.Shutdown()
-	}()
+	tc := newRaftTestContext()
+	defer tc.Shutdown()
 
 	req := &AppendEntriesMessage{}
-	reply, err := raft1.rpc.AppendEntries(raft1.peers["r2"], req)
+	reply, err := tc.raft1.rpc.AppendEntries(tc.raft1.peers["r2"], req)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, reply, &AppendEntriesReply{Term: 0x0, Success: true, PeerID: "r2", Message: "success", LastLogIndex: 0x0})
 
-	assert.Equal(t, raft1.state, FOLLOWER)
-	assert.Equal(t, raft2.state, FOLLOWER)
-	assert.Equal(t, raft3.state, FOLLOWER)
+	assert.Equal(t, tc.raft1.state, FOLLOWER)
+	assert.Equal(t, tc.raft2.state, FOLLOWER)
+	assert.Equal(t, tc.raft3.state, FOLLOWER)
 
-	clock.Add(5 * time.Second)
-	clock.Add(5 * time.Second)
-	clock.Add(5 * time.Second)
+	time.Sleep(2 * time.Second)
 
-	assert.Equal(t, raft1.state, FOLLOWER)
-	assert.Equal(t, raft2.state, FOLLOWER)
-	assert.Equal(t, raft3.state, FOLLOWER)
+	assert.True(t, tc.raft1.state == LEADER || tc.raft2.state == LEADER || tc.raft3.state == LEADER)
 }
 
 func Test_calculateLeaderCommitIndex(t *testing.T) {
