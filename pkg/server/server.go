@@ -3,9 +3,10 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"github.com/Fleurer/miniraft/pkg/raft"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/Fleurer/miniraft/pkg/raft"
 )
 
 type RaftServer struct {
@@ -126,7 +127,7 @@ func (s *RaftServer) responseError(w http.ResponseWriter, code int, message stri
 }
 
 func (s *RaftServer) Shutdown() error {
-	s.r.Shutdown()
+	s.r.Stop()
 	ctx := context.TODO()
 	return s.httpServer.Shutdown(ctx)
 }

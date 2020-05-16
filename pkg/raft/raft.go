@@ -25,7 +25,7 @@ type Peer struct {
 type RaftNode interface {
 	Loop()
 	Process(msg RaftMessage) (RaftReply, error)
-	Shutdown()
+	Stop()
 }
 
 type raftNode struct {
@@ -90,8 +90,7 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 		peers[id] = Peer{ID: id, Addr: addr}
 	}
 
-	prefix := fmt.Sprintf("rft:%s:", opt.ID)
-	s, err := storage.NewRaftStorage(opt.StoragePath, prefix)
+	storage, err := storage.NewRaftStorage(opt.StoragePath, opt.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +101,7 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 	r.electionTimeout = time.Duration(opt.ElectionTimeoutMs) * time.Millisecond
 	r.heartbeatInterval = time.Duration(opt.HeartbeatIntervalMs) * time.Millisecond
 	r.peers = peers
-	r.storage = s
+	r.storage = storage
 	r.votedFor = ""
 	r.nextIndex = map[string]uint64{}
 	r.matchIndex = map[string]uint64{}
@@ -522,7 +521,7 @@ func (r *raftNode) resetLeader() {
 	}
 }
 
-func (r *raftNode) Shutdown() {
+func (r *raftNode) Stop() {
 	r.logger.Debugf("raft.shutdown")
 	select {
 	case <-r.closed:

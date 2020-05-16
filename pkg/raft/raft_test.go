@@ -98,7 +98,7 @@ func (c *raftTestContext) Node(i int) *raftNode {
 func (c *raftTestContext) Shutdown() {
 	log.Printf("raftTestContext.shutdown")
 	for _, node := range c.nodes {
-		node.Shutdown()
+		node.Stop()
 	}
 }
 
@@ -134,13 +134,13 @@ func Test_Raft_Election(t *testing.T) {
 	assert.Equal(t, 2, len(tc.Followers()))
 
 	rl := tc.Leader()
-	rl.Shutdown()
+	rl.Stop()
 	time.Sleep(2 * time.Second)
 	assert.True(t, tc.Leader() != nil)
 	assert.Equal(t, 1, len(tc.Followers()))
 
 	rl = tc.Leader()
-	rl.Shutdown()
+	rl.Stop()
 	time.Sleep(2 * time.Second)
 	assert.True(t, tc.Leader() == nil)
 	assert.Equal(t, 1, len(tc.Candidates()))

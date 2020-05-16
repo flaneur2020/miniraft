@@ -70,11 +70,14 @@ type raftStorage struct {
 	path      string
 }
 
-func NewRaftStorage(path string, keyPrefix string) (RaftStorage, error) {
+func NewRaftStorage(path string, raftID string) (RaftStorage, error) {
 	db, err := leveldb.OpenFile(path, nil)
 	if err != nil {
 		return nil, err
 	}
+
+	keyPrefix := fmt.Sprintf("rft:%s", raftID)
+
 	s := &raftStorage{
 		db:        db,
 		path:      path,
