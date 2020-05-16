@@ -10,8 +10,10 @@ todo
 - [x] appendEntriesReply 处理
 - [x] log replication bug 处理
 - [x] apply 逻辑
-- [ ] lastApplied 和状态机事务
 - [ ] Node.start
+- [ ] snapshot
+- [ ] lastLogTerm 和 currentTerm 的使用？
+- [ ] lastApplied 和状态机事务
 - [ ] lock
 
 references

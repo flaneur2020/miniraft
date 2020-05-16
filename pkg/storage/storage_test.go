@@ -14,7 +14,7 @@ func Test_GetLastLogEntry(t *testing.T) {
 		{Command: RaftCommand{}, Term: 0, Index: 2},
 		{Command: RaftCommand{}, Term: 0, Index: 0},
 	}
-	err = s.AppendLogEntries(es)
+	err = s.AppendBulkLogEntries(es)
 	assert.Nil(t, err)
 }
 
@@ -27,7 +27,7 @@ func TestRaftStorage_MustGetLastLogIndexAndTerm(t *testing.T) {
 	assert.Equal(t, uint64(0), lastIndex)
 	assert.Equal(t, uint64(0), lastTerm)
 
-	s.AppendLogEntryByCommand(NopCommand, 1)
+	s.AppendLogEntry(NopCommand, 1)
 	lastIndex, lastTerm = s.MustGetLastLogIndexAndTerm()
 	assert.Equal(t, uint64(1), lastIndex)
 	assert.Equal(t, uint64(1), lastTerm)
@@ -38,9 +38,9 @@ func TestRaftStorage_TruncateSince(t *testing.T) {
 	s.Reset()
 	assert.Nil(t, err)
 
-	s.AppendLogEntryByCommand(NopCommand, 1)
-	s.AppendLogEntryByCommand(NopCommand, 1)
-	s.AppendLogEntryByCommand(NopCommand, 1)
+	s.AppendLogEntry(NopCommand, 1)
+	s.AppendLogEntry(NopCommand, 1)
+	s.AppendLogEntry(NopCommand, 1)
 
 	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
 	assert.Equal(t, uint64(3), lastIndex)
@@ -66,7 +66,7 @@ func Test_GetLogEntriesSince(t *testing.T) {
 		{Command: RaftCommand{}, Term: 0, Index: 0},
 		{Command: RaftCommand{}, Term: 0, Index: 2},
 	}
-	err = s.AppendLogEntries(es)
+	err = s.AppendBulkLogEntries(es)
 	assert.Nil(t, err)
 
 	es = s.MustGetLogEntriesSince(3)

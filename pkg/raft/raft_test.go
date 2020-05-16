@@ -146,7 +146,7 @@ func Test_Raft_Election(t *testing.T) {
 	assert.Equal(t, 1, len(tc.Candidates()))
 }
 
-func TestRaftNode_Command(t *testing.T) {
+func TestRaftNode_Replication(t *testing.T) {
 	tc := newRaftTestContext()
 	defer tc.Shutdown()
 

@@ -221,7 +221,7 @@ func (r *raftNode) loopLeader() {
 	replyC := make(chan *AppendEntriesReply)
 
 	// a leader should append a nop log entry immediately
-	logIndex, _ := r.storage.AppendLogEntryByCommand(storage.NopCommand, r.currentTerm)
+	logIndex, _ := r.storage.AppendLogEntry(storage.NopCommand, r.currentTerm)
 	r.logger.Infof("leader.append-nop term=%v logIndex=%v", r.currentTerm, logIndex)
 
 	for r.state == LEADER {
@@ -295,11 +295,17 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	}
 
 	if msg.PrevLogIndex < lastLogIndex {
-		c := r.storage.TruncateSince(msg.PrevLogIndex + 1)
-		r.logger.Infof("raft.truncate-since msg.PrevLogIndex=%v lastLogIndex=%v count=%v", msg.PrevLogIndex, lastLogIndex, c)
+		count, err := r.storage.TruncateSince(msg.PrevLogIndex + 1)
+		if err != nil {
+			panic(err)
+		}
+
+		r.logger.Infof("raft.truncate-since msg.PrevLogIndex=%v lastLogIndex=%v count=%v", msg.PrevLogIndex, lastLogIndex, count)
 	}
 
-	r.storage.AppendLogEntries(msg.LogEntries)
+	if err := r.storage.AppendBulkLogEntries(msg.LogEntries); err != nil {
+		panic(err)
+	}
 
 	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
 	r.commitIndex = msg.CommitIndex
@@ -347,7 +353,11 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 		return &CommandReply{Value: []byte{}, Message: "nop"}
 
 	case storage.PutCommandType:
-		logIndex, _ := r.storage.AppendLogEntryByCommand(req.Command, r.currentTerm)
+		logIndex, err := r.storage.AppendLogEntry(req.Command, r.currentTerm)
+		if err != nil {
+			panic(err)
+		}
+
 		// TODO: await logIndex got commit
 		return &CommandReply{Value: []byte{}, Message: fmt.Sprintf("logIndex: %d", logIndex)}
 
@@ -387,8 +397,6 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 }
 
 func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
-	// r.logger.Debugf("leader.process-append-entries-reply reply=%#v", reply)
-
 	if reply.Term > r.currentTerm {
 		// if the receiver has got higher term than myself, turn myself into follower
 		r.become(FOLLOWER)
