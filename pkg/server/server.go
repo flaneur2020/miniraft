@@ -52,7 +52,7 @@ func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	reply, err := s.r.Process(&msg)
+	reply, err := s.r.Do(&msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -69,7 +69,7 @@ func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, err := s.r.Process(&msg)
+	reply, err := s.r.Do(&msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return
@@ -86,7 +86,7 @@ func (s *RaftServer) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reply, err := s.r.Process(&msg)
+	reply, err := s.r.Do(&msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
 		return

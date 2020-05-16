@@ -155,7 +155,7 @@ func TestRaftNode_Replication(t *testing.T) {
 	assert.Equal(t, 2, len(tc.Followers()))
 
 	rl := tc.Leader()
-	rl.Process(&CommandMessage{storage.RaftCommand{
+	rl.Do(&CommandMessage{storage.RaftCommand{
 		Type:  storage.PutCommandType,
 		Key:   []byte("key1"),
 		Value: []byte("value1"),

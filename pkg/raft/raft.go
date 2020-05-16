@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -18,15 +19,24 @@ const (
 	CLOSED    = "closed"
 )
 
+var (
+	ErrClosed = errors.New("closed")
+)
+
 type Peer struct {
 	ID   string `json:"id"`
 	Addr string `json:"addr"`
 }
 
 type RaftNode interface {
+	// start the raft loop
 	Start()
-	Process(msg RaftMessage) (RaftReply, error)
+
+	// close the raft loop
 	Stop()
+
+	// pass the message to raft loop
+	Do(msg RaftMessage) (RaftReply, error)
 }
 
 type raftNode struct {
@@ -143,6 +153,24 @@ func (r *raftNode) closeRaft() {
 	close(r.eventc)
 }
 
+func (r *raftNode) Do(msg RaftMessage) (RaftReply, error) {
+	ev := newRaftEV(msg)
+
+	select {
+	case <-r.closed:
+		return nil, ErrClosed
+	case r.eventc <- ev:
+	}
+
+	select {
+	case <-r.closed:
+		return nil, ErrClosed
+	case reply := <-ev.replyc:
+		close(ev.replyc)
+		return reply, nil
+	}
+}
+
 func (r *raftNode) loop() {
 	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
 
@@ -159,24 +187,6 @@ func (r *raftNode) loop() {
 	}
 
 	r.logger.Infof("raft.loop.closed")
-}
-
-func (r *raftNode) Process(msg RaftMessage) (RaftReply, error) {
-	ev := newRaftEV(msg)
-
-	select {
-	case <-r.closed:
-		return nil, fmt.Errorf("closed")
-	case r.eventc <- ev:
-	}
-
-	select {
-	case <-r.closed:
-		return nil, fmt.Errorf("closed")
-	case reply := <-ev.replyc:
-		close(ev.replyc)
-		return reply, nil
-	}
 }
 
 func (r *raftNode) loopFollower() {
