@@ -8,8 +8,8 @@ todo
 - [x] 异步 runElection
 - [x] 计算 commitIndex
 - [x] appendEntriesReply 处理
-- [ ] log replication bug 处理
-- [ ] apply 逻辑
+- [x] log replication bug 处理
+- [x] apply 逻辑
 - [ ] Node.start
 - [ ] 确认 requestVote 和 appendEntries 逻辑
 - [ ] lock

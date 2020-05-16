@@ -538,7 +538,7 @@ func (r *raftNode) become(s string) {
 
 func (r *raftNode) applyLogs() {
 	// TODO: optimize this
-	entries := r.storage.MustGetLogEntriesSince(r.lastApplied)
+	entries := r.storage.MustGetLogEntriesSince(r.lastApplied + 1)
 	for _, entry := range entries {
 		if entry.Index > r.commitIndex {
 			break
@@ -547,8 +547,11 @@ func (r *raftNode) applyLogs() {
 		switch entry.Command.Type {
 		case storage.PutCommandType:
 			r.storage.MustPutKV(entry.Command.Key, entry.Command.Value)
-			r.logger.Debugf("raft.apply-log command=%#v", entry.Command)
 		}
+
+		r.lastApplied++
+		r.logger.Debugf("%s.apply-log lastApplied=%d commitIndex=%d command=%#v", r.state, r.lastApplied, r.commitIndex, entry.Command)
+		r.mustPersistState()
 	}
 }
 
