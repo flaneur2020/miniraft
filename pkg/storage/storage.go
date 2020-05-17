@@ -90,7 +90,7 @@ func (rs *raftStorage) Reset() error {
 	hs := &RaftHardState{
 		LastApplied: 0,
 		VotedFor:    "",
-		CurrentTerm: 0,
+		CurrentTerm: 1,
 	}
 
 	if err := rs.PutHardState(hs); err != nil {
@@ -117,7 +117,7 @@ func (rs *raftStorage) GetHardState() (*RaftHardState, error) {
 		m = RaftHardState{
 			VotedFor:    "",
 			LastApplied: 0,
-			CurrentTerm: 0,
+			CurrentTerm: 1,
 		}
 		err error
 		s   string
@@ -142,7 +142,7 @@ func (rs *raftStorage) Close() {
 }
 
 func (rs *raftStorage) MustPutKV(key []byte, value []byte) {
-	k := []byte(fmt.Sprintf("d:%rs", key))
+	k := []byte(fmt.Sprintf("d:%s", key))
 	err := rs.db.Put(k, value, nil)
 	if err != nil {
 		panic(err)
@@ -150,7 +150,7 @@ func (rs *raftStorage) MustPutKV(key []byte, value []byte) {
 }
 
 func (rs *raftStorage) MustGetKV(key []byte) ([]byte, bool) {
-	k := []byte(fmt.Sprintf("d:%rs", key))
+	k := []byte(fmt.Sprintf("d:%s", key))
 	buf, err := rs.db.Get(k, nil)
 	if err == lerrors.ErrNotFound {
 		return []byte{}, false
@@ -161,7 +161,7 @@ func (rs *raftStorage) MustGetKV(key []byte) ([]byte, bool) {
 }
 
 func (rs *raftStorage) MustDeleteKV(key []byte) {
-	k := []byte(fmt.Sprintf("d:%rs", key))
+	k := []byte(fmt.Sprintf("d:%s", key))
 	err := rs.db.Delete(k, nil)
 	if err != lerrors.ErrNotFound {
 		panic(err)
@@ -263,7 +263,7 @@ func (rs *raftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
 }
 
 func (rs *raftStorage) dbGetString(k []byte) (string, error) {
-	key := []byte(fmt.Sprintf("%rs:%rs", rs.keyPrefix, k))
+	key := []byte(fmt.Sprintf("%s:%s", rs.keyPrefix, k))
 	buf, err := rs.db.Get(key, nil)
 	if err != nil {
 		return "", err
@@ -272,7 +272,7 @@ func (rs *raftStorage) dbGetString(k []byte) (string, error) {
 }
 
 func (rs *raftStorage) dbPutString(k []byte, v string) error {
-	key := []byte(fmt.Sprintf("%rs:%rs", rs.keyPrefix, k))
+	key := []byte(fmt.Sprintf("%s:%s", rs.keyPrefix, k))
 	return rs.db.Put(key, []byte(v), nil)
 }
 
