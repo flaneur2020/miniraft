@@ -21,8 +21,9 @@ func newRaftTestContext() *raftTestContext {
 	os.MkdirAll("/tmp/raftNode-test/", 0777)
 
 	var (
-		electionTimeout   uint64 = 900
-		heartbeatInterval uint64 = 100
+		tickIntervalMs uint = 100
+		electionTicks  uint = 9
+		heartbeatTicks uint = 1
 	)
 
 	initialPeers := map[string]string{"r0": "192.168.0.1:4500", "r1": "192.168.0.1:4501", "r2": "192.168.0.1:4502"}
@@ -30,13 +31,15 @@ func newRaftTestContext() *raftTestContext {
 	opts := [3]*RaftOptions{}
 	for i := 0; i < 3; i++ {
 		opts[i] = &RaftOptions{
-			ID:                  fmt.Sprintf("r%d", i),
-			StoragePath:         fmt.Sprintf("/tmp/raftNode-test/r0%d", i),
-			ListenAddr:          fmt.Sprintf("0.0.0.0:450%d", i),
-			PeerAddr:            fmt.Sprintf("192.168.0.1:450%d", i),
-			InitialPeers:        initialPeers,
-			ElectionTimeoutMs:   electionTimeout,
-			HeartbeatIntervalMs: heartbeatInterval,
+			ID:           fmt.Sprintf("r%d", i),
+			StoragePath:  fmt.Sprintf("/tmp/raftNode-test/r0%d", i),
+			ListenAddr:   fmt.Sprintf("0.0.0.0:450%d", i),
+			PeerAddr:     fmt.Sprintf("192.168.0.1:450%d", i),
+			InitialPeers: initialPeers,
+
+			TickIntervalMs: tickIntervalMs,
+			ElectionTicks:  electionTicks,
+			HeartbeatTicks: heartbeatTicks,
 		}
 	}
 
@@ -178,7 +181,7 @@ func TestRaftNode_Request(t *testing.T) {
 	got, err := rf1.rpc.AppendEntries(rf1.peers[rf2.ID], req)
 	// want := &AppendEntriesReply{Term: 0x0, Success: true, PeerID: "r1", Message: "success", LastLogIndex: 0x0}
 	assert.Equal(t, nil, err)
-	assert.Equal(t, true, got.Success)
+	assert.Equal(t, false, got.Success)
 }
 
 func Test_calculateLeaderCommitIndex(t *testing.T) {

@@ -10,10 +10,12 @@ todo
 - [x] appendEntriesReply 处理
 - [x] log replication bug 处理
 - [x] apply 逻辑
+- [ ] 使写入操作在 apply 后再返回
 - [ ] snapshot
+- [ ] state machine 接口
 - [ ] lastLogTerm 和 currentTerm 的使用？
-- [ ] lastApplied 和状态机事务
 - [ ] lock
+- [ ] raft paper test https://github.com/etcd-io/etcd/blob/master/raft/raft_paper_test.go
 
 references
 

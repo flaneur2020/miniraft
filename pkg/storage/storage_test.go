@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,67 +15,72 @@ func Test_GetLastLogEntry(t *testing.T) {
 		{Command: RaftCommand{}, Term: 0, Index: 2},
 		{Command: RaftCommand{}, Term: 0, Index: 0},
 	}
-	err = s.AppendBulkLogEntries(es)
+	err = s.BulkAppend(es)
 	assert.Nil(t, err)
 }
 
 func TestRaftStorage_MustGetLastLogIndexAndTerm(t *testing.T) {
 	s, err := NewRaftStorage("/tmp/test03", "raft-test01")
-	s.Reset()
+	s.Destroy()
+	defer s.Close()
 	assert.Nil(t, err)
 
-	lastIndex, lastTerm := s.MustGetLastLogIndexAndTerm()
+	lastIndex, lastTerm := s.MustLastIndexAndTerm()
 	assert.Equal(t, uint64(0), lastIndex)
 	assert.Equal(t, uint64(0), lastTerm)
 
-	s.AppendLogEntry(NopCommand, 1)
-	lastIndex, lastTerm = s.MustGetLastLogIndexAndTerm()
+	s.Append(NopCommand, 1)
+	lastIndex, lastTerm = s.MustLastIndexAndTerm()
 	assert.Equal(t, uint64(1), lastIndex)
 	assert.Equal(t, uint64(1), lastTerm)
 }
 
 func TestRaftStorage_TruncateSince(t *testing.T) {
 	s, err := NewRaftStorage("/tmp/test02", "raft-test01")
-	s.Reset()
+	s.Destroy()
+	defer s.Close()
 	assert.Nil(t, err)
 
-	s.AppendLogEntry(NopCommand, 1)
-	s.AppendLogEntry(NopCommand, 1)
-	s.AppendLogEntry(NopCommand, 1)
+	s.Append(NopCommand, 1)
+	s.Append(NopCommand, 1)
+	s.Append(NopCommand, 1)
 
-	lastIndex, _ := s.MustGetLastLogIndexAndTerm()
+	lastIndex, _ := s.MustLastIndexAndTerm()
 	assert.Equal(t, uint64(3), lastIndex)
 
 	s.TruncateSince(3)
-	lastIndex, _ = s.MustGetLastLogIndexAndTerm()
+	lastIndex, _ = s.MustLastIndexAndTerm()
 	assert.Equal(t, uint64(2), lastIndex)
 
 	s.TruncateSince(2)
-	lastIndex, _ = s.MustGetLastLogIndexAndTerm()
+	lastIndex, _ = s.MustLastIndexAndTerm()
 	assert.Equal(t, uint64(1), lastIndex)
 
 	s.TruncateSince(0)
-	lastIndex, _ = s.MustGetLastLogIndexAndTerm()
+	lastIndex, _ = s.MustLastIndexAndTerm()
 	assert.Equal(t, uint64(0), lastIndex)
 }
 
 func Test_GetLogEntriesSince(t *testing.T) {
 	s, err := NewRaftStorage("/tmp/test02", "raft-test01")
-	assert.Nil(t, err)
+	assert.Nilf(t, err, fmt.Sprintf("%s", err))
+	assert.NotNil(t, s)
+	defer s.Close()
+
 	es := []RaftLogEntry{
 		{Command: RaftCommand{}, Term: 0, Index: 1},
 		{Command: RaftCommand{}, Term: 0, Index: 0},
 		{Command: RaftCommand{}, Term: 0, Index: 2},
 	}
-	err = s.AppendBulkLogEntries(es)
+	err = s.BulkAppend(es)
 	assert.Nil(t, err)
 
-	es = s.MustGetLogEntriesSince(3)
+	es = s.EntriesSince(3)
 	assert.Equal(t, len(es), 0)
 
-	es = s.MustGetLogEntriesSince(0)
+	es = s.EntriesSince(0)
 	assert.Equal(t, len(es), 3)
 
-	es = s.MustGetLogEntriesSince(2)
+	es = s.EntriesSince(2)
 	assert.Equal(t, len(es), 1)
 }

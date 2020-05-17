@@ -49,16 +49,17 @@ type RaftStorage interface {
 	MustPutKV([]byte, []byte)
 	MustDeleteKV([]byte)
 
-	GetHardState() (*RaftHardState, error)
+	HardState() (*RaftHardState, error)
 	PutHardState(s *RaftHardState) error
 
-	MustGetLastLogIndexAndTerm() (uint64, uint64)
-	MustGetLogEntriesSince(index uint64) []RaftLogEntry
-	AppendBulkLogEntries(entries []RaftLogEntry) error
-	AppendLogEntry(command RaftCommand, term uint64) (uint64, error)
-	TruncateSince(index uint64) (int, error)
+	MustLastIndexAndTerm() (uint64, uint64)
+	EntriesSince(lo uint64) ([]RaftLogEntry, error)
 
-	Reset() error
+	BulkAppend(entries []RaftLogEntry) error
+	Append(command RaftCommand, term uint64) (uint64, error)
+	TruncateSince(lo uint64) (int, error)
+
+	Destroy() error
 	Close()
 }
 
@@ -86,7 +87,7 @@ func NewRaftStorage(path string, raftID string) (RaftStorage, error) {
 	return s, nil
 }
 
-func (rs *raftStorage) Reset() error {
+func (rs *raftStorage) Destroy() error {
 	hs := &RaftHardState{
 		LastApplied: 0,
 		VotedFor:    "",
@@ -112,7 +113,7 @@ func (rs *raftStorage) PutHardState(m *RaftHardState) error {
 	return rs.dbPutString([]byte(kMeta), string(buf))
 }
 
-func (rs *raftStorage) GetHardState() (*RaftHardState, error) {
+func (rs *raftStorage) HardState() (*RaftHardState, error) {
 	var (
 		m = RaftHardState{
 			VotedFor:    "",
@@ -168,7 +169,7 @@ func (rs *raftStorage) MustDeleteKV(key []byte) {
 	}
 }
 
-func (rs *raftStorage) AppendBulkLogEntries(entries []RaftLogEntry) error {
+func (rs *raftStorage) BulkAppend(entries []RaftLogEntry) error {
 	batch := new(leveldb.Batch)
 	for _, le := range entries {
 		k := makeLogEntryKey(le.Index)
@@ -182,19 +183,19 @@ func (rs *raftStorage) AppendBulkLogEntries(entries []RaftLogEntry) error {
 	return nil
 }
 
-func (rs *raftStorage) AppendLogEntry(command RaftCommand, term uint64) (uint64, error) {
-	lastIndex, _ := rs.MustGetLastLogIndexAndTerm()
+func (rs *raftStorage) Append(command RaftCommand, term uint64) (uint64, error) {
+	lastIndex, _ := rs.MustLastIndexAndTerm()
 	entry := RaftLogEntry{
 		Index:   lastIndex + 1,
 		Term:    term,
 		Command: command,
 	}
 	lastIndex++
-	err := rs.AppendBulkLogEntries([]RaftLogEntry{entry})
+	err := rs.BulkAppend([]RaftLogEntry{entry})
 	return lastIndex, err
 }
 
-func (rs *raftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) {
+func (rs *raftStorage) EntriesSince(index uint64) ([]RaftLogEntry, error) {
 	rg := lutil.BytesPrefix([]byte(kLogEntries))
 	rg.Start = makeLogEntryKey(index)
 	iter := rs.db.NewIterator(rg, nil)
@@ -212,22 +213,18 @@ func (rs *raftStorage) GetLogEntriesSince(index uint64) ([]RaftLogEntry, error) 
 	return es, nil
 }
 
-func (rs *raftStorage) MustGetLogEntriesSince(index uint64) []RaftLogEntry {
-	es, err := rs.GetLogEntriesSince(index)
-	if err != nil {
-		panic(err)
-	}
-	return es
-}
-
 func (rs *raftStorage) TruncateSince(index uint64) (int, error) {
-	entries := rs.MustGetLogEntriesSince(index)
+	entries, err := rs.EntriesSince(index)
+	if err != nil {
+		return 0, err
+	}
+
 	batch := new(leveldb.Batch)
 	for _, entry := range entries {
 		batch.Delete(makeLogEntryKey(entry.Index))
 	}
 
-	err := rs.db.Write(batch, nil)
+	err = rs.db.Write(batch, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -251,7 +248,7 @@ func (rs *raftStorage) getLastLogEntry() (*RaftLogEntry, error) {
 	return &le, nil
 }
 
-func (rs *raftStorage) MustGetLastLogIndexAndTerm() (uint64, uint64) {
+func (rs *raftStorage) MustLastIndexAndTerm() (uint64, uint64) {
 	le, err := rs.getLastLogEntry()
 	if le == nil && err == nil {
 		return 0, 0

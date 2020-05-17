@@ -3,7 +3,8 @@
     "storagePath": "/tmp/raft-debug/r02",
     "listenAddr": "0.0.0.0:4502",
     "peerAddr": "localhost:4502",
-    "electionTimeoutMs": 5000,
-    "heartbeatIntervalMs": 500,
+    "tickIntervalMs": 100,
+    "electionTicks": 50,
+    "heartbeatTicks": 5,
     "initialPeers": {"r1": "localhost:4501", "r2": "localhost:4502", "r3": "localhost:4503"}
 }

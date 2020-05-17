@@ -39,6 +39,19 @@ type RaftNode interface {
 	Do(msg RaftMessage) (RaftReply, error)
 }
 
+type RaftOptions struct {
+	ID          string `json:"id"`
+	StoragePath string `json:"storagePath"`
+
+	ListenAddr   string            `json:"listenAddr"`
+	PeerAddr     string            `json:"peerAddr"`
+	InitialPeers map[string]string `json:"initialPeers"`
+
+	TickIntervalMs uint `json:"tickIntervalMs"`
+	ElectionTicks  uint `json:"electionTicks"`
+	HeartbeatTicks uint `json:"heartbeatTicks"`
+}
+
 type raftNode struct {
 	ID    string
 	state string
@@ -68,16 +81,6 @@ type raftNode struct {
 	eventc       chan raftEV
 	closed       chan struct{}
 	routineGroup sync.WaitGroup
-}
-
-type RaftOptions struct {
-	ID                  string            `json:"id"`
-	StoragePath         string            `json:"storagePath"`
-	ListenAddr          string            `json:"listenAddr"`
-	PeerAddr            string            `json:"peerAddr"`
-	InitialPeers        map[string]string `json:"initialPeers"`
-	ElectionTimeoutMs   uint64            `json:"electionTimeoutMs"`
-	HeartbeatIntervalMs uint64            `json:"heartbeatIntervalMs"`
 }
 
 type raftEV struct {
@@ -110,8 +113,8 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 	r := &raftNode{}
 	r.ID = opt.ID
 	r.state = FOLLOWER
-	r.electionTimeout = time.Duration(opt.ElectionTimeoutMs) * time.Millisecond
-	r.heartbeatInterval = time.Duration(opt.HeartbeatIntervalMs) * time.Millisecond
+	r.electionTimeout = time.Duration(opt.ElectionTicks*opt.TickIntervalMs) * time.Millisecond
+	r.heartbeatInterval = time.Duration(opt.HeartbeatTicks*opt.TickIntervalMs) * time.Millisecond
 	r.peers = peers
 	r.storage = storage
 	r.votedFor = ""
@@ -260,7 +263,7 @@ func (r *raftNode) loopLeader() {
 	replyC := make(chan *AppendEntriesReply)
 
 	// a leader should append a nop log entry immediately
-	logIndex, _ := r.storage.AppendLogEntry(storage.NopCommand, r.currentTerm)
+	logIndex, _ := r.storage.Append(storage.NopCommand, r.currentTerm)
 	r.logger.Infof("leader.append-nop term=%v logIndex=%v", r.currentTerm, logIndex)
 
 	for r.state == LEADER {
@@ -301,17 +304,17 @@ func (r *raftNode) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 }
 
 func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
-	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
+	lastIndex, _ := r.storage.MustLastIndexAndTerm()
 
-	// r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastLogIndex=%d", msg, r.currentTerm, lastLogIndex)
+	// r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastIndex=%d", msg, r.currentTerm, lastIndex)
 
 	if msg.Term < r.currentTerm {
-		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "msg.Term < r.currentTerm")
+		return newAppendEntriesReply(false, r.currentTerm, lastIndex, r.ID, "msg.Term < r.currentTerm")
 	}
 
 	if msg.Term == r.currentTerm {
 		if r.state == LEADER {
-			return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, "i'm leader")
+			return newAppendEntriesReply(false, r.currentTerm, lastIndex, r.ID, "i'm leader")
 		}
 
 		if r.state == CANDIDATE {
@@ -329,34 +332,34 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 		r.mustPersistState()
 	}
 
-	if msg.PrevLogIndex > lastLogIndex {
-		return newAppendEntriesReply(false, r.currentTerm, lastLogIndex, r.ID, fmt.Sprintf("log not match: msg.prevLogIndex(%v) > lastLogIndex(%v)", msg.PrevLogIndex, lastLogIndex))
+	if msg.PrevLogIndex > lastIndex {
+		return newAppendEntriesReply(false, r.currentTerm, lastIndex, r.ID, fmt.Sprintf("log not match: msg.prevLogIndex(%v) > lastIndex(%v)", msg.PrevLogIndex, lastIndex))
 	}
 
-	if msg.PrevLogIndex < lastLogIndex {
+	if msg.PrevLogIndex < lastIndex {
 		count, err := r.storage.TruncateSince(msg.PrevLogIndex + 1)
 		if err != nil {
 			panic(err)
 		}
 
-		r.logger.Infof("raft.truncate-since msg.PrevLogIndex=%v lastLogIndex=%v count=%v", msg.PrevLogIndex, lastLogIndex, count)
+		r.logger.Infof("raft.truncate-since msg.PrevLogIndex=%v lastIndex=%v count=%v", msg.PrevLogIndex, lastIndex, count)
 	}
 
-	if err := r.storage.AppendBulkLogEntries(msg.LogEntries); err != nil {
+	if err := r.storage.BulkAppend(msg.LogEntries); err != nil {
 		panic(err)
 	}
 
-	lastLogIndex, _ = r.storage.MustGetLastLogIndexAndTerm()
+	lastIndex, _ = r.storage.MustLastIndexAndTerm()
 	r.commitIndex = msg.CommitIndex
 	r.applyLogs()
 
-	return newAppendEntriesReply(true, r.currentTerm, lastLogIndex, r.ID, "success")
+	return newAppendEntriesReply(true, r.currentTerm, lastIndex, r.ID, "success")
 }
 
 func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
-	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+	lastIndex, lastLogTerm := r.storage.MustLastIndexAndTerm()
 
-	r.logger.Debugf("raft.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastLogIndex=%d lastLogTerm=%d", msg, r.currentTerm, r.votedFor, lastLogIndex, lastLogTerm)
+	r.logger.Debugf("raft.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastIndex=%d lastLogTerm=%d", msg, r.currentTerm, r.votedFor, lastIndex, lastLogTerm)
 
 	// if the caller's term smaller than mine, refuse
 	if msg.Term < r.currentTerm {
@@ -377,7 +380,7 @@ func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply
 	}
 
 	// if the candidate's log is not at least as update as our last log
-	if lastLogIndex > msg.LastLogIndex || lastLogTerm > msg.LastLogTerm {
+	if lastIndex > msg.LastLogIndex || lastLogTerm > msg.LastLogTerm {
 		return newRequestVoteReply(false, r.currentTerm, "candidate's log not at least as update as our last log")
 	}
 
@@ -392,7 +395,7 @@ func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 		return &CommandReply{Value: []byte{}, Message: "nop"}
 
 	case storage.PutCommandType:
-		logIndex, err := r.storage.AppendLogEntry(req.Command, r.currentTerm)
+		logIndex, err := r.storage.Append(req.Command, r.currentTerm)
 		if err != nil {
 			panic(err)
 		}
@@ -419,8 +422,8 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 		return
 	}
 
-	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
-	r.logger.Debugf("leader.broadcast-heartbeats nextIndex=%v matchIndex=%v term=%v commitIndex=%v lastLogIndex=%v", r.nextIndex, r.matchIndex, r.currentTerm, r.commitIndex, lastLogIndex)
+	lastIndex, _ := r.storage.MustLastIndexAndTerm()
+	r.logger.Debugf("leader.broadcast-heartbeats nextIndex=%v matchIndex=%v term=%v commitIndex=%v lastIndex=%v", r.nextIndex, r.matchIndex, r.currentTerm, r.commitIndex, lastIndex)
 
 	for id, msg := range messages {
 		p := r.peers[id]
@@ -520,14 +523,14 @@ func (r *raftNode) runElection(cb chan bool) {
 }
 
 func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
-	lastLogIndex, lastLogTerm := r.storage.MustGetLastLogIndexAndTerm()
+	lastIndex, lastLogTerm := r.storage.MustLastIndexAndTerm()
 	currentTerm := r.currentTerm
 
 	messages := map[string]*RequestVoteMessage{}
 	for id := range r.peers {
 		msg := RequestVoteMessage{}
 		msg.CandidateID = r.ID
-		msg.LastLogIndex = lastLogIndex
+		msg.LastLogIndex = lastIndex
 		msg.LastLogTerm = lastLogTerm
 		msg.Term = currentTerm
 		messages[id] = &msg
@@ -536,7 +539,10 @@ func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMessage, e
 }
 
 func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
-	messages := map[string]*AppendEntriesMessage{}
+	var (
+		messages = map[string]*AppendEntriesMessage{}
+		err      error
+	)
 	for id, idx := range nextLogIndexes {
 		msg := &AppendEntriesMessage{}
 		msg.LeaderID = r.ID
@@ -547,9 +553,16 @@ func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) 
 		if idx == 0 {
 			msg.PrevLogIndex = 0
 			msg.PrevLogTerm = 0
-			msg.LogEntries = r.storage.MustGetLogEntriesSince(0)
+			msg.LogEntries, err = r.storage.EntriesSince(0)
+			if err != nil {
+				panic(err)
+			}
 		} else {
-			logEntries := r.storage.MustGetLogEntriesSince(idx - 1)
+			logEntries, err := r.storage.EntriesSince(idx - 1)
+			if err != nil {
+				panic(err)
+			}
+
 			if len(logEntries) >= 1 {
 				msg.PrevLogIndex = logEntries[0].Index
 				msg.PrevLogTerm = logEntries[0].Term
@@ -564,9 +577,9 @@ func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) 
 }
 
 func (r *raftNode) resetLeader() {
-	lastLogIndex, _ := r.storage.MustGetLastLogIndexAndTerm()
+	lastIndex, _ := r.storage.MustLastIndexAndTerm()
 	for _, p := range r.peers {
-		r.nextIndex[p.ID] = lastLogIndex + 1
+		r.nextIndex[p.ID] = lastIndex + 1
 		r.matchIndex[p.ID] = 0
 	}
 }
@@ -578,7 +591,11 @@ func (r *raftNode) become(s string) {
 
 func (r *raftNode) applyLogs() {
 	// TODO: optimize this
-	entries := r.storage.MustGetLogEntriesSince(r.lastApplied + 1)
+	entries, err := r.storage.EntriesSince(r.lastApplied + 1)
+	if err != nil {
+		panic(err)
+	}
+
 	for _, entry := range entries {
 		if entry.Index > r.commitIndex {
 			break
@@ -607,7 +624,7 @@ func (r *raftNode) mustPersistState() {
 }
 
 func (r *raftNode) mustLoadState() {
-	m, err := r.storage.GetHardState()
+	m, err := r.storage.HardState()
 	if err != nil {
 		panic(err)
 	}
