@@ -39,6 +39,14 @@ func (m *HeartbeatTimeoutMsg) MessageKind() string {
 	return "heartbeat-timeout"
 }
 
+type AppendEntriesResultMsg struct {
+	reply *AppendEntriesReply
+}
+
+func (m *AppendEntriesResultMsg) MessageKind() string {
+	return "append-entries-result"
+}
+
 type AppendEntriesMsg struct {
 	Term         uint64 `json:"term"`
 	LeaderID     string `json:"leaderID"`

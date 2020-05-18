@@ -312,13 +312,21 @@ func (r *raftNode) loopLeader() {
 			r.closeRaft()
 
 		case <-heartbeatTicker.C:
-			r.broadcastAppendEntries(replyC)
+			go r.dispatch(&HeartbeatTimeoutMsg{})
 
 		case reply := <-replyC:
-			r.processAppendEntriesReply(reply)
+			go r.dispatch(&AppendEntriesResultMsg{reply: reply})
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
+			case *HeartbeatTimeoutMsg:
+				r.broadcastAppendEntries(replyC)
+				ev.Done(nil, nil)
+
+			case *AppendEntriesResultMsg:
+				r.processAppendEntriesReply(msg.reply)
+				ev.Done(nil, nil)
+
 			case *AppendEntriesMsg:
 				reply := r.processAppendEntries(msg)
 				ev.Done(reply, nil)
