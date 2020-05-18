@@ -178,7 +178,7 @@ func TestRaftNode_Request(t *testing.T) {
 	tc := newRaftTestContext()
 	defer tc.Shutdown()
 
-	req := &AppendEntriesMessage{}
+	req := &AppendEntriesMsg{}
 	rf1 := tc.Followers()[0]
 	rf2 := tc.Followers()[1]
 	got, err := rf1.rpc.AppendEntries(rf1.peers[rf2.ID], req)

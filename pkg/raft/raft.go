@@ -93,7 +93,7 @@ type raftEV struct {
 func newRaftEV(msg RaftMessage) *raftEV {
 	return &raftEV{
 		msg:   msg,
-		c:     make(chan struct{}),
+		c:     make(chan struct{}, 1),
 		reply: nil,
 		err:   nil,
 	}
@@ -186,6 +186,17 @@ func (r *raftNode) Do(msg RaftMessage) (RaftReply, error) {
 	}
 }
 
+func (r *raftNode) dispatch(msg RaftMessage) error {
+	ev := newRaftEV(msg)
+
+	select {
+	case <-r.closed:
+		return ErrClosed
+	case r.eventc <- ev:
+		return nil
+	}
+}
+
 func (r *raftNode) loop() {
 	r.logger.Infof("raft.loop.start: peers=%v", r.peers)
 
@@ -210,24 +221,30 @@ func (r *raftNode) loopFollower() {
 	for r.state == FOLLOWER {
 		select {
 		case <-electionTimer.C:
-			r.logger.Infof("follower.loop.electionTimeout")
-			r.become(CANDIDATE)
+			go r.dispatch(&ElectionTimeoutMsg{})
 
 		case <-r.closed:
 			r.closeRaft()
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
-			case *AppendEntriesMessage:
+			case *ElectionTimeoutMsg:
+				r.logger.Infof("follower.loop.electionTimeout")
+				r.become(CANDIDATE)
+
+			case *AppendEntriesMsg:
 				reply := r.processAppendEntries(msg)
 				ev.Done(reply, nil)
 				electionTimer = r.newElectionTimer()
-			case *RequestVoteMessage:
+
+			case *RequestVoteMsg:
 				reply := r.processRequestVote(msg)
 				ev.Done(reply, nil)
-			case *ShowStatusMessage:
+
+			case *ShowStatusMsg:
 				reply := r.processShowStatus(msg)
 				ev.Done(reply, nil)
+
 			default:
 				reply := newMessageReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
 				ev.Done(reply, nil)
@@ -241,9 +258,8 @@ func (r *raftNode) loopFollower() {
 // 另一台机器宣称自己赢得选举；
 // 一段时间过后没有赢家
 func (r *raftNode) loopCandidate() {
-	grantedC := make(chan bool)
 	electionTimer := r.newElectionTimer()
-	r.runElection(grantedC)
+	go r.dispatch(&ElectionTimeoutMsg{})
 
 	for r.state == CANDIDATE {
 		select {
@@ -251,23 +267,28 @@ func (r *raftNode) loopCandidate() {
 			r.closeRaft()
 
 		case <-electionTimer.C:
-			r.runElection(grantedC)
-			electionTimer = r.newElectionTimer()
-
-		case ok := <-grantedC:
-			if ok {
-				r.become(LEADER)
-				continue
-			}
+			r.dispatch(&ElectionTimeoutMsg{})
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
-			case *RequestVoteMessage:
+			case *ElectionTimeoutMsg:
+				r.runElection()
+				electionTimer = r.newElectionTimer()
+
+			case *ElectionResultMsg:
+				if msg.granted {
+					r.become(LEADER)
+					continue
+				}
+
+			case *RequestVoteMsg:
 				reply := r.processRequestVote(msg)
 				ev.Done(reply, nil)
-			case *ShowStatusMessage:
+
+			case *ShowStatusMsg:
 				reply := r.processShowStatus(msg)
 				ev.Done(reply, nil)
+
 			default:
 				reply := newMessageReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
 				ev.Done(reply, nil)
@@ -298,18 +319,22 @@ func (r *raftNode) loopLeader() {
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
-			case *AppendEntriesMessage:
+			case *AppendEntriesMsg:
 				reply := r.processAppendEntries(msg)
 				ev.Done(reply, nil)
-			case *RequestVoteMessage:
+
+			case *RequestVoteMsg:
 				reply := r.processRequestVote(msg)
 				ev.Done(reply, nil)
-			case *ShowStatusMessage:
+
+			case *ShowStatusMsg:
 				reply := r.processShowStatus(msg)
 				ev.Done(reply, nil)
+
 			case *CommandMessage:
 				reply := r.processCommand(msg)
 				ev.Done(reply, nil)
+
 			default:
 				reply := newMessageReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
 				ev.Done(reply, nil)
@@ -318,7 +343,7 @@ func (r *raftNode) loopLeader() {
 	}
 }
 
-func (r *raftNode) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
+func (r *raftNode) processShowStatus(msg *ShowStatusMsg) *ShowStatusReply {
 	b := ShowStatusReply{}
 	b.Term = r.currentTerm
 	b.CommitIndex = r.commitIndex
@@ -327,7 +352,7 @@ func (r *raftNode) processShowStatus(msg *ShowStatusMessage) *ShowStatusReply {
 	return &b
 }
 
-func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntriesReply {
+func (r *raftNode) processAppendEntries(msg *AppendEntriesMsg) *AppendEntriesReply {
 	lastIndex, _ := r.storage.MustLastIndexAndTerm()
 
 	// r.logger.Debugf("raft.process-append-entries msg=%#v currentTerm=%d lastIndex=%d", msg, r.currentTerm, lastIndex)
@@ -380,7 +405,7 @@ func (r *raftNode) processAppendEntries(msg *AppendEntriesMessage) *AppendEntrie
 	return newAppendEntriesReply(true, r.currentTerm, lastIndex, r.ID, "success")
 }
 
-func (r *raftNode) processRequestVote(msg *RequestVoteMessage) *RequestVoteReply {
+func (r *raftNode) processRequestVote(msg *RequestVoteMsg) *RequestVoteReply {
 	lastIndex, lastLogTerm := r.storage.MustLastIndexAndTerm()
 
 	r.logger.Debugf("raft.process-request-vote msg=%#v currentTerm=%d votedFor=%s lastIndex=%d lastLogTerm=%d", msg, r.currentTerm, r.votedFor, lastIndex, lastLogTerm)
@@ -453,7 +478,7 @@ func (r *raftNode) broadcastAppendEntries(cb chan *AppendEntriesReply) {
 		p := r.peers[id]
 
 		r.routineGroup.Add(1)
-		go func(p Peer, msg *AppendEntriesMessage) {
+		go func(p Peer, msg *AppendEntriesMsg) {
 			defer r.routineGroup.Done()
 
 			reply, err := r.rpc.AppendEntries(p, msg)
@@ -492,7 +517,7 @@ func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *raftNode) runElection(cb chan bool) {
+func (r *raftNode) runElection() {
 	if r.state != CANDIDATE {
 		panic("should be candidate")
 	}
@@ -515,7 +540,7 @@ func (r *raftNode) runElection(cb chan bool) {
 		p := r.peers[id]
 
 		r.routineGroup.Add(1)
-		go func(p Peer, msg *RequestVoteMessage) {
+		go func(p Peer, msg *RequestVoteMsg) {
 			defer r.routineGroup.Done()
 
 			reply, err := r.rpc.RequestVote(p, msg)
@@ -540,19 +565,17 @@ func (r *raftNode) runElection(cb chan bool) {
 		success := (granted+1)*2 > len(r.peers)+1
 		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%v", granted+1, len(r.peers)+1, success)
 
-		if success {
-			cb <- success
-		}
+		r.dispatch(&ElectionResultMsg{granted: success})
 	}()
 }
 
-func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMessage, error) {
+func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMsg, error) {
 	lastIndex, lastLogTerm := r.storage.MustLastIndexAndTerm()
 	currentTerm := r.currentTerm
 
-	messages := map[string]*RequestVoteMessage{}
+	messages := map[string]*RequestVoteMsg{}
 	for id := range r.peers {
-		msg := RequestVoteMessage{}
+		msg := RequestVoteMsg{}
 		msg.CandidateID = r.ID
 		msg.LastLogIndex = lastIndex
 		msg.LastLogTerm = lastLogTerm
@@ -562,13 +585,13 @@ func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMessage, e
 	return messages, nil
 }
 
-func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMessage, error) {
+func (r *raftNode) buildAppendEntriesMessages(nextLogIndexes map[string]uint64) (map[string]*AppendEntriesMsg, error) {
 	var (
-		messages = map[string]*AppendEntriesMessage{}
+		messages = map[string]*AppendEntriesMsg{}
 		err      error
 	)
 	for id, idx := range nextLogIndexes {
-		msg := &AppendEntriesMessage{}
+		msg := &AppendEntriesMsg{}
 		msg.LeaderID = r.ID
 		msg.LogEntries = []storage.RaftLogEntry{}
 		msg.Term = r.currentTerm

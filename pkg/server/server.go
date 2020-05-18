@@ -45,7 +45,7 @@ func (s *RaftServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request) {
-	msg := raft.AppendEntriesMessage{}
+	msg := raft.AppendEntriesMsg{}
 	err := s.parseMessage(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())
@@ -62,7 +62,7 @@ func (s *RaftServer) handleAppendEntries(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *RaftServer) handleRequestVote(w http.ResponseWriter, r *http.Request) {
-	msg := raft.RequestVoteMessage{}
+	msg := raft.RequestVoteMsg{}
 	err := s.parseMessage(r, &msg)
 	if err != nil {
 		s.responseError(w, 400, err.Error())

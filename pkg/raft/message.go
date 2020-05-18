@@ -19,7 +19,27 @@ type RaftReply interface {
 	ReplyKind() string
 }
 
-type AppendEntriesMessage struct {
+type ElectionTimeoutMsg struct{}
+
+func (m *ElectionTimeoutMsg) MessageKind() string {
+	return "election-timeout"
+}
+
+type ElectionResultMsg struct {
+	granted bool
+}
+
+func (m *ElectionResultMsg) MessageKind() string {
+	return "election-result"
+}
+
+type HeartbeatTimeoutMsg struct{}
+
+func (m *HeartbeatTimeoutMsg) MessageKind() string {
+	return "heartbeat-timeout"
+}
+
+type AppendEntriesMsg struct {
 	Term         uint64 `json:"term"`
 	LeaderID     string `json:"leaderID"`
 	CommitIndex  uint64 `json:"commitIndex"`
@@ -29,7 +49,7 @@ type AppendEntriesMessage struct {
 	LogEntries []storage.RaftLogEntry `json:"logEntries,omitempty"`
 }
 
-func (m *AppendEntriesMessage) MessageKind() string {
+func (m *AppendEntriesMsg) MessageKind() string {
 	return "append-entries"
 }
 
@@ -45,14 +65,14 @@ func (m *AppendEntriesReply) ReplyKind() string {
 	return "append-entries"
 }
 
-type RequestVoteMessage struct {
+type RequestVoteMsg struct {
 	Term         uint64 `json:"term"`
 	CandidateID  string `json:"candidateID"`
 	LastLogIndex uint64 `json:"lastLogIndex"`
 	LastLogTerm  uint64 `json:"lasstLogTerm"`
 }
 
-func (m *RequestVoteMessage) MessageKind() string {
+func (m *RequestVoteMsg) MessageKind() string {
 	return "request-vote"
 }
 
@@ -66,10 +86,10 @@ func (r *RequestVoteReply) ReplyKind() string {
 	return "request-vote"
 }
 
-type ShowStatusMessage struct {
+type ShowStatusMsg struct {
 }
 
-func (m *ShowStatusMessage) MessageKind() string {
+func (m *ShowStatusMsg) MessageKind() string {
 	return "show-status"
 }
 

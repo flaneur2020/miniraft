@@ -13,8 +13,8 @@ import (
 )
 
 type RaftRPC interface {
-	RequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error)
-	AppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error)
+	RequestVote(p Peer, req *RequestVoteMsg) (*RequestVoteReply, error)
+	AppendEntries(p Peer, req *AppendEntriesMsg) (*AppendEntriesReply, error)
 }
 
 type raftRPC struct {
@@ -25,7 +25,7 @@ func NewRaftRPC(logger *util.Logger) RaftRPC {
 	return &raftRPC{logger: logger}
 }
 
-func (rr *raftRPC) AppendEntries(p Peer, request *AppendEntriesMessage) (*AppendEntriesReply, error) {
+func (rr *raftRPC) AppendEntries(p Peer, request *AppendEntriesMsg) (*AppendEntriesReply, error) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
 	resp := AppendEntriesReply{}
 	err := rr.post(p, url, request, &resp)
@@ -36,7 +36,7 @@ func (rr *raftRPC) AppendEntries(p Peer, request *AppendEntriesMessage) (*Append
 	return &resp, nil
 }
 
-func (rr *raftRPC) RequestVote(p Peer, request *RequestVoteMessage) (*RequestVoteReply, error) {
+func (rr *raftRPC) RequestVote(p Peer, request *RequestVoteMsg) (*RequestVoteReply, error) {
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
 	resp := RequestVoteReply{}
 	err := rr.post(p, url, request, &resp)
@@ -77,7 +77,7 @@ type mockRaftRequester struct {
 	rafts map[string]*raftNode
 }
 
-func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMessage) (*RequestVoteReply, error) {
+func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMsg) (*RequestVoteReply, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
 
@@ -99,7 +99,7 @@ func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMessage) (*Reque
 	}
 }
 
-func (r *mockRaftRequester) AppendEntries(p Peer, req *AppendEntriesMessage) (*AppendEntriesReply, error) {
+func (r *mockRaftRequester) AppendEntries(p Peer, req *AppendEntriesMsg) (*AppendEntriesReply, error) {
 	raft := r.rafts[p.ID]
 	ev := newRaftEV(req)
 
