@@ -10,6 +10,7 @@ todo
 - [x] appendEntriesReply 处理
 - [x] log replication bug 处理
 - [x] apply 逻辑
+- [ ] raftNode 主循环全部用消息
 - [ ] 使写入操作在 apply 后再返回
 - [ ] snapshot
 - [ ] state machine 接口

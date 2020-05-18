@@ -132,11 +132,14 @@ func Test_Raft_Election(t *testing.T) {
 	assert.True(t, tc.Leader() == nil)
 	assert.Equal(t, 3, len(tc.Followers()))
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	assert.True(t, tc.Leader() != nil)
 	assert.Equal(t, 2, len(tc.Followers()))
 
 	rl := tc.Leader()
+	if rl == nil {
+		t.Fatalf("rl should not be nil")
+	}
 	rl.Stop()
 	time.Sleep(2 * time.Second)
 	assert.True(t, tc.Leader() != nil)

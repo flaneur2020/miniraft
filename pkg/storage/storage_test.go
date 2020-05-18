@@ -75,12 +75,12 @@ func Test_GetLogEntriesSince(t *testing.T) {
 	err = s.BulkAppend(es)
 	assert.Nil(t, err)
 
-	es = s.EntriesSince(3)
+	es, _ = s.EntriesSince(3)
 	assert.Equal(t, len(es), 0)
 
-	es = s.EntriesSince(0)
+	es, _ = s.EntriesSince(0)
 	assert.Equal(t, len(es), 3)
 
-	es = s.EntriesSince(2)
+	es, _ = s.EntriesSince(2)
 	assert.Equal(t, len(es), 1)
 }

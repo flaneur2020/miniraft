@@ -78,18 +78,31 @@ type raftNode struct {
 	storage storage.RaftStorage
 	rpc     RaftRPC
 
-	eventc       chan raftEV
+	eventc       chan *raftEV
 	closed       chan struct{}
 	routineGroup sync.WaitGroup
 }
 
 type raftEV struct {
-	msg    RaftMessage
-	replyc chan RaftReply
+	msg   RaftMessage
+	c     chan struct{}
+	reply RaftReply
+	err   error
 }
 
-func newRaftEV(msg RaftMessage) raftEV {
-	return raftEV{msg, make(chan RaftReply, 1)}
+func newRaftEV(msg RaftMessage) *raftEV {
+	return &raftEV{
+		msg:   msg,
+		c:     make(chan struct{}),
+		reply: nil,
+		err:   nil,
+	}
+}
+
+func (ev *raftEV) Done(reply RaftReply, err error) {
+	ev.reply = reply
+	ev.err = err
+	close(ev.c)
 }
 
 func NewRaft(opt *RaftOptions) (RaftNode, error) {
@@ -123,7 +136,7 @@ func newRaft(opt *RaftOptions) (*raftNode, error) {
 	r.clock = clock.New()
 	r.logger = util.NewRaftLogger(r.ID, util.DEBUG)
 	r.rpc = NewRaftRPC(r.logger)
-	r.eventc = make(chan raftEV)
+	r.eventc = make(chan *raftEV)
 	r.closed = make(chan struct{})
 	r.mustLoadState()
 	return r, nil
@@ -168,9 +181,8 @@ func (r *raftNode) Do(msg RaftMessage) (RaftReply, error) {
 	select {
 	case <-r.closed:
 		return nil, ErrClosed
-	case reply := <-ev.replyc:
-		close(ev.replyc)
-		return reply, nil
+	case <-ev.c:
+		return ev.reply, ev.err
 	}
 }
 
@@ -207,14 +219,18 @@ func (r *raftNode) loopFollower() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
-				ev.replyc <- r.processAppendEntries(msg)
+				reply := r.processAppendEntries(msg)
+				ev.Done(reply, nil)
 				electionTimer = r.newElectionTimer()
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVote(msg)
+				reply := r.processRequestVote(msg)
+				ev.Done(reply, nil)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatus(msg)
+				reply := r.processShowStatus(msg)
+				ev.Done(reply, nil)
 			default:
-				ev.replyc <- newMessageReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
+				reply := newMessageReply(400, fmt.Sprintf("invalid request %T for follower: %v", ev.msg, ev.msg))
+				ev.Done(reply, nil)
 			}
 		}
 	}
@@ -247,11 +263,14 @@ func (r *raftNode) loopCandidate() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVote(msg)
+				reply := r.processRequestVote(msg)
+				ev.Done(reply, nil)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatus(msg)
+				reply := r.processShowStatus(msg)
+				ev.Done(reply, nil)
 			default:
-				ev.replyc <- newMessageReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
+				reply := newMessageReply(400, fmt.Sprintf("invalid msg for candidate: %T", msg))
+				ev.Done(reply, nil)
 			}
 		}
 	}
@@ -280,15 +299,20 @@ func (r *raftNode) loopLeader() {
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *AppendEntriesMessage:
-				ev.replyc <- r.processAppendEntries(msg)
+				reply := r.processAppendEntries(msg)
+				ev.Done(reply, nil)
 			case *RequestVoteMessage:
-				ev.replyc <- r.processRequestVote(msg)
+				reply := r.processRequestVote(msg)
+				ev.Done(reply, nil)
 			case *ShowStatusMessage:
-				ev.replyc <- r.processShowStatus(msg)
+				reply := r.processShowStatus(msg)
+				ev.Done(reply, nil)
 			case *CommandMessage:
-				ev.replyc <- r.processCommand(msg)
+				reply := r.processCommand(msg)
+				ev.Done(reply, nil)
 			default:
-				ev.replyc <- newMessageReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
+				reply := newMessageReply(400, fmt.Sprintf("invalid msg for leader: %T", msg))
+				ev.Done(reply, nil)
 			}
 		}
 	}
