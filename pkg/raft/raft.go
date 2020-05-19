@@ -260,7 +260,7 @@ func (r *raftNode) loopFollower() {
 func (r *raftNode) loopCandidate() {
 	electionTimer := r.newElectionTimer()
 	replyC := make(chan *RequestVoteReply, len(r.peers))
-	granted := 1
+	granted := 0
 	go r.dispatch(&ElectionTimeoutMsg{})
 
 	for r.state == CANDIDATE {
@@ -279,14 +279,14 @@ func (r *raftNode) loopCandidate() {
 			case *ElectionTimeoutMsg:
 				r.runElection(replyC)
 				electionTimer = r.newElectionTimer()
-				granted = 1 // vote for itself
+				granted = 0
 
 			case *RequestVoteResultMsg:
 				if msg.reply != nil && msg.reply.VoteGranted {
 					granted++
 				}
-				success := granted*2 > len(r.peers)+1
-				r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%v", granted+1, len(r.peers)+1, success)
+				success := (granted+1)*2 > len(r.peers)+1
+				r.logger.Debugf("raft.candidate.broadcast-request-vote term=%d granted=%d total=%d success=%v", r.currentTerm, granted+1, len(r.peers)+1, success)
 				if success {
 					r.become(LEADER)
 					continue
@@ -560,6 +560,10 @@ func (r *raftNode) runElection(cb chan *RequestVoteReply) {
 
 	for id, msg := range messages {
 		p := r.peers[id]
+
+		if id == r.ID {
+			panic("do not request vote for myself")
+		}
 
 		r.routineGroup.Add(1)
 		go func(p Peer, msg *RequestVoteMsg) {
