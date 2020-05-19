@@ -25,12 +25,12 @@ func (m *ElectionTimeoutMsg) MessageKind() string {
 	return "election-timeout"
 }
 
-type ElectionResultMsg struct {
-	granted bool
+type RequestVoteResultMsg struct {
+	reply *RequestVoteReply
 }
 
-func (m *ElectionResultMsg) MessageKind() string {
-	return "election-result"
+func (m *RequestVoteResultMsg) MessageKind() string {
+	return "request-vote-result"
 }
 
 type HeartbeatTimeoutMsg struct{}

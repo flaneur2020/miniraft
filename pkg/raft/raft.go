@@ -166,7 +166,7 @@ func (r *raftNode) Stop() {
 func (r *raftNode) closeRaft() {
 	r.state = CLOSED
 	r.storage.Close()
-	close(r.eventc)
+	// close(r.eventc)
 }
 
 func (r *raftNode) Do(msg RaftMessage) (RaftReply, error) {
@@ -259,6 +259,8 @@ func (r *raftNode) loopFollower() {
 // 一段时间过后没有赢家
 func (r *raftNode) loopCandidate() {
 	electionTimer := r.newElectionTimer()
+	replyC := make(chan *RequestVoteReply, len(r.peers))
+	granted := 1
 	go r.dispatch(&ElectionTimeoutMsg{})
 
 	for r.state == CANDIDATE {
@@ -267,16 +269,25 @@ func (r *raftNode) loopCandidate() {
 			r.closeRaft()
 
 		case <-electionTimer.C:
-			r.dispatch(&ElectionTimeoutMsg{})
+			go r.dispatch(&ElectionTimeoutMsg{})
+
+		case reply := <-replyC:
+			go r.dispatch(&RequestVoteResultMsg{reply: reply})
 
 		case ev := <-r.eventc:
 			switch msg := ev.msg.(type) {
 			case *ElectionTimeoutMsg:
-				r.runElection()
+				r.runElection(replyC)
 				electionTimer = r.newElectionTimer()
+				granted = 1 // vote for itself
 
-			case *ElectionResultMsg:
-				if msg.granted {
+			case *RequestVoteResultMsg:
+				if msg.reply != nil && msg.reply.VoteGranted {
+					granted++
+				}
+				success := granted*2 > len(r.peers)+1
+				r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%v", granted+1, len(r.peers)+1, success)
+				if success {
 					r.become(LEADER)
 					continue
 				}
@@ -300,7 +311,7 @@ func (r *raftNode) loopCandidate() {
 func (r *raftNode) loopLeader() {
 	r.resetLeader()
 	heartbeatTicker := r.clock.Ticker(r.heartbeatInterval)
-	replyC := make(chan *AppendEntriesReply)
+	replyC := make(chan *AppendEntriesReply, len(r.peers))
 
 	// a leader should append a nop log entry immediately
 	logIndex, _ := r.storage.Append(storage.NopCommand, r.currentTerm)
@@ -446,6 +457,10 @@ func (r *raftNode) processRequestVote(msg *RequestVoteMsg) *RequestVoteReply {
 	return newRequestVoteReply(true, r.currentTerm, "cheers, granted")
 }
 
+func (r *raftNode) processRequestVoteResult(reply *RequestVoteReply) {
+
+}
+
 func (r *raftNode) processCommand(req *CommandMessage) *CommandReply {
 	switch req.Command.Type {
 	case storage.NopCommandType:
@@ -525,7 +540,7 @@ func (r *raftNode) processAppendEntriesReply(reply *AppendEntriesReply) {
 }
 
 // runElection broadcasts the requestVote messages, and collect the vote result asynchronously.
-func (r *raftNode) runElection() {
+func (r *raftNode) runElection(cb chan *RequestVoteReply) {
 	if r.state != CANDIDATE {
 		panic("should be candidate")
 	}
@@ -543,7 +558,6 @@ func (r *raftNode) runElection() {
 		return
 	}
 
-	replyC := make(chan *RequestVoteReply, len(messages))
 	for id, msg := range messages {
 		p := r.peers[id]
 
@@ -552,29 +566,11 @@ func (r *raftNode) runElection() {
 			defer r.routineGroup.Done()
 
 			reply, err := r.rpc.RequestVote(p, msg)
-			replyC <- reply
+			cb <- reply
 
 			r.logger.Debugf("raft.candidate.request-vote target=%s resp=%#v err=%s", id, reply, err)
 		}(p, msg)
 	}
-
-	r.routineGroup.Add(1)
-	go func() {
-		defer r.routineGroup.Done()
-
-		granted := 0
-		for range messages {
-			reply := <-replyC
-			if reply != nil && reply.VoteGranted {
-				granted++
-			}
-		}
-
-		success := (granted+1)*2 > len(r.peers)+1
-		r.logger.Debugf("raft.candidate.broadcast-request-vote granted=%d total=%d success=%v", granted+1, len(r.peers)+1, success)
-
-		r.dispatch(&ElectionResultMsg{granted: success})
-	}()
 }
 
 func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMsg, error) {
@@ -583,6 +579,9 @@ func (r *raftNode) buildRequestVoteMessages() (map[string]*RequestVoteMsg, error
 
 	messages := map[string]*RequestVoteMsg{}
 	for id := range r.peers {
+		if id == r.ID {
+			continue
+		}
 		msg := RequestVoteMsg{}
 		msg.CandidateID = r.ID
 		msg.LastLogIndex = lastIndex
