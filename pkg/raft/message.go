@@ -26,7 +26,7 @@ func (m *ElectionTimeoutMsg) MessageKind() string {
 }
 
 type RequestVoteResultMsg struct {
-	reply *RequestVoteReply
+	reply *RequestVoteReplyMsg
 }
 
 func (m *RequestVoteResultMsg) MessageKind() string {
@@ -37,14 +37,6 @@ type HeartbeatTimeoutMsg struct{}
 
 func (m *HeartbeatTimeoutMsg) MessageKind() string {
 	return "heartbeat-timeout"
-}
-
-type AppendEntriesResultMsg struct {
-	reply *AppendEntriesReply
-}
-
-func (m *AppendEntriesResultMsg) MessageKind() string {
-	return "append-entries-result"
 }
 
 type AppendEntriesMsg struct {
@@ -61,7 +53,7 @@ func (m *AppendEntriesMsg) MessageKind() string {
 	return "append-entries"
 }
 
-type AppendEntriesReply struct {
+type AppendEntriesReplyMsg struct {
 	PeerID       string `json:"peerID"`
 	Term         uint64 `json:"term"`
 	Success      bool   `json:"success"`
@@ -69,7 +61,11 @@ type AppendEntriesReply struct {
 	LastLogIndex uint64 `json:"last_log_index"`
 }
 
-func (m *AppendEntriesReply) ReplyKind() string {
+func (m *AppendEntriesReplyMsg) MessageKind() string {
+	return "append-entries"
+}
+
+func (m *AppendEntriesReplyMsg) ReplyKind() string {
 	return "append-entries"
 }
 
@@ -84,13 +80,17 @@ func (m *RequestVoteMsg) MessageKind() string {
 	return "request-vote"
 }
 
-type RequestVoteReply struct {
+type RequestVoteReplyMsg struct {
 	Term        uint64 `json:"term"`
 	VoteGranted bool   `json:"voteGranted"`
 	Message     string `json:"message"`
 }
 
-func (r *RequestVoteReply) ReplyKind() string {
+func (r *RequestVoteReplyMsg) MessageKind() string {
+	return "request-vote"
+}
+
+func (r *RequestVoteReplyMsg) ReplyKind() string {
 	return "request-vote"
 }
 
@@ -138,12 +138,12 @@ func (r *MessageReply) ReplyKind() string {
 	return "message"
 }
 
-func newRequestVoteReply(success bool, term uint64, message string) *RequestVoteReply {
-	return &RequestVoteReply{VoteGranted: success, Term: term, Message: message}
+func newRequestVoteReply(success bool, term uint64, message string) *RequestVoteReplyMsg {
+	return &RequestVoteReplyMsg{VoteGranted: success, Term: term, Message: message}
 }
 
-func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, peerID string, message string) *AppendEntriesReply {
-	return &AppendEntriesReply{Success: success, Term: term, LastLogIndex: lastLogIndex, PeerID: peerID, Message: message}
+func newAppendEntriesReply(success bool, term uint64, lastLogIndex uint64, peerID string, message string) *AppendEntriesReplyMsg {
+	return &AppendEntriesReplyMsg{Success: success, Term: term, LastLogIndex: lastLogIndex, PeerID: peerID, Message: message}
 }
 
 func newMessageReply(code int, message string) *MessageReply {

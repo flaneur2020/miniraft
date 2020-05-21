@@ -3,7 +3,6 @@ package raft
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,8 +12,8 @@ import (
 )
 
 type RaftRPC interface {
-	RequestVote(p Peer, req *RequestVoteMsg) (*RequestVoteReply, error)
-	AppendEntries(p Peer, req *AppendEntriesMsg) (*AppendEntriesReply, error)
+	SendRequestVote(p Peer, req *RequestVoteMsg, cb func(RaftMessage))
+	SendAppendEntries(p Peer, req *AppendEntriesMsg, cb func(RaftMessage))
 }
 
 type raftRPC struct {
@@ -25,26 +24,28 @@ func NewRaftRPC(logger *util.Logger) RaftRPC {
 	return &raftRPC{logger: logger}
 }
 
-func (rr *raftRPC) AppendEntries(p Peer, request *AppendEntriesMsg) (*AppendEntriesReply, error) {
+func (rr *raftRPC) SendAppendEntries(p Peer, request *AppendEntriesMsg, cb func(msg RaftMessage)) {
 	url := fmt.Sprintf("http://%s/_raft/append-entries", p.Addr)
-	resp := AppendEntriesReply{}
-	err := rr.post(p, url, request, &resp)
+	msg := AppendEntriesReplyMsg{}
+	err := rr.post(p, url, request, &msg)
 	// rr.logger.Debugf("raftNode.request.send-append-entries to=%s msg=%#v err=%s", p.ID, request, err)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return &resp, nil
+
+	cb(&msg)
 }
 
-func (rr *raftRPC) RequestVote(p Peer, request *RequestVoteMsg) (*RequestVoteReply, error) {
+func (rr *raftRPC) SendRequestVote(p Peer, request *RequestVoteMsg, cb func(msg RaftMessage)) {
 	url := fmt.Sprintf("http://%s/_raft/request-vote", p.Addr)
-	resp := RequestVoteReply{}
-	err := rr.post(p, url, request, &resp)
+	msg := RequestVoteReplyMsg{}
+	err := rr.post(p, url, request, &msg)
 	// rr.logger.Debugf("raftNode.request.send-request vote to=%s msg=%#v err=%s", p.ID, request, err)
 	if err != nil {
-		return nil, err
+		return
 	}
-	return &resp, nil
+
+	cb(&msg)
 }
 
 func (rr *raftRPC) post(p Peer, url string, request interface{}, response interface{}) error {
@@ -77,47 +78,39 @@ type mockRaftRequester struct {
 	rafts map[string]*raftNode
 }
 
-func (r *mockRaftRequester) RequestVote(p Peer, req *RequestVoteMsg) (*RequestVoteReply, error) {
-	raft := r.rafts[p.ID]
+func (rq *mockRaftRequester) SendRequestVote(p Peer, req *RequestVoteMsg, cb func(RaftMessage)) {
+	raft := rq.rafts[p.ID]
 	ev := newRaftEV(req)
 
 	select {
 	case <-raft.closed:
-		return nil, errors.New("raft closed")
+		return
 	default:
 	}
 
 	raft.eventc <- ev
 	<-ev.c
-	resp := ev.reply
-	if r, ok := resp.(*MessageReply); ok {
-		return nil, fmt.Errorf("bad result: %s", r.Message)
-	} else if r, ok := resp.(*RequestVoteReply); ok {
-		return r, nil
-	} else {
-		return nil, fmt.Errorf("unknown type")
+	msg := ev.reply
+	if msg, ok := msg.(*RequestVoteReplyMsg); ok {
+		cb(msg)
 	}
 }
 
-func (r *mockRaftRequester) AppendEntries(p Peer, req *AppendEntriesMsg) (*AppendEntriesReply, error) {
-	raft := r.rafts[p.ID]
+func (rq *mockRaftRequester) SendAppendEntries(p Peer, req *AppendEntriesMsg, cb func(RaftMessage)) {
+	raft := rq.rafts[p.ID]
 	ev := newRaftEV(req)
 
 	select {
 	case <-raft.closed:
-		return nil, errors.New("raft closed")
+		return
 	default:
 	}
 
 	raft.eventc <- ev
 	<-ev.c
-	resp := ev.reply
+	msg := ev.reply
 
-	if r, ok := resp.(*MessageReply); ok {
-		return nil, fmt.Errorf("bad result: %s", r.Message)
-	} else if r, ok := resp.(*AppendEntriesReply); ok {
-		return r, nil
-	} else {
-		return nil, fmt.Errorf("unknown type")
+	if msg, ok := msg.(*AppendEntriesReplyMsg); ok {
+		cb(msg)
 	}
 }

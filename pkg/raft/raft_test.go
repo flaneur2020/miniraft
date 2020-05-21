@@ -174,19 +174,6 @@ func TestRaftNode_Replication(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-func TestRaftNode_Request(t *testing.T) {
-	tc := newRaftTestContext()
-	defer tc.Shutdown()
-
-	req := &AppendEntriesMsg{}
-	rf1 := tc.Followers()[0]
-	rf2 := tc.Followers()[1]
-	got, err := rf1.rpc.AppendEntries(rf1.peers[rf2.ID], req)
-	// want := &AppendEntriesReply{Term: 0x0, Success: true, PeerID: "r1", Message: "success", LastLogIndex: 0x0}
-	assert.Equal(t, nil, err)
-	assert.Equal(t, false, got.Success)
-}
-
 func Test_calculateLeaderCommitIndex(t *testing.T) {
 	dt := []struct {
 		m    map[string]uint64

@@ -11,6 +11,7 @@ todo
 - [x] log replication bug 处理
 - [x] apply 逻辑
 - [x] raftNode 主循环全部用消息
+- [x] 将请求与响应都包装为 Message
 - [ ] tick 逻辑
 - [ ] 使写入操作在 apply 后再返回
 - [ ] snapshot
